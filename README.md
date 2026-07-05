@@ -7,44 +7,44 @@ An enterprise-grade ML experimentation and evaluation platform designed to regis
 ## 🏗️ Architecture Overview
 
 ```text
-                +-----------------------+
-                |  Dataset Registry     |
-                +-----------+-----------+
-                            |
-                            v
-                +-----------------------+
-                |  Experiment Manager   |
-                +-----------+-----------+
-                            |
-          +-----------------+------------------+
-          |                                    |
-          v                                    v
-+--------------------+              +----------------------+
-| Inference Engine   |              | Agent Runner         |
-+--------------------+              +----------------------+
-          |                                    |
-          +-----------------+------------------+
-                            |
-                            v
-                +-----------------------+
-                | Evaluation Engine     |
-                +-----------+-----------+
-                            |
-                            v
-                +-----------------------+
-                | Report Generator      |
-                +-----------+-----------+
-                            |
-                            v
-                Dashboard / Leaderboards
+                    +-----------------------+
+                    |  Dataset Registry     |
+                    +-----------+-----------+
+                                |
+                                v
+                    +-----------------------+
+                    |  Experiment Manager   |
+                    +-----------+-----------+
+                                |
+              +-----------------+------------------+
+              |                                    |
+              v                                    v
+    +--------------------+              +----------------------+
+    | Inference Engine   |              | Agent Runner         |
+    +--------------------+              +----------------------+
+              |                                    |
+              +-----------------+------------------+
+                                |
+                                v
+                    +-----------------------+
+                    | Evaluation Engine     |
+                    +-----------+-----------+
+                                |
+                                v
+                    +-----------------------+
+                    | Report Generator      |
+                    +-----------+-----------+
+                                |
+                                v
+                    Dashboard / Leaderboards
 ```
 
 The platform is designed around a decoupled, thread-safe asynchronous architecture:
-1. **FastAPI Web Endpoint:** Accepts dataset additions, model setups, and experiment launches.
+1. **FastAPI Web Endpoint:** Accepts dataset additions, model setups, experiment launches, sweeps, and report downloads.
 2. **SQLite WAL Database:** Stores all configuration mappings, logs, and job statuses. Implements optimistic lock transactions to support multi-process/thread workers.
 3. **Queue Worker Pool:** Polls jobs, triggers evaluation workflows, updates status steps, and handles backoffs and Dead Letter Queue (DLQ) state transitions.
 4. **Plugin Metrics Engine:** Decoupled evaluator classes calculate task-specific scores (BLEU, ROUGE, Faithfulness, Safety refusal, Tool errors, LLM-as-a-Judge).
-5. **Vite React UI:** Custom-styled dark glassmorphism (emerald/graphite theme) dashboard showing live updates, Pareto plots, side-by-side run comparisons, and failed log diagnostic inspectors.
+5. **Vite React UI:** Custom-styled dark glassmorphism (emerald/graphite theme) dashboard showing live updates, multi-dimensional scatter matrix bubble charts, side-by-side run comparisons, and failed log diagnostic inspectors.
 
 ---
 
@@ -57,7 +57,11 @@ The platform is designed around a decoupled, thread-safe asynchronous architectu
 5. **Evaluation Engine (Plug-in Architecture):** Modular evaluators for Classification, Generation overlap, LLM-as-a-Judge, Agents, RAG alignment, Safety, and Hallucination citation analysis.
 6. **Failure Diagnostic Center:** Algorithmic clustering of failing runs into distinct categories (Math Error, Coding Bug, Hallucination, Formatting, and Reasoning Slips).
 7. **Model Comparison Workspace:** Interactive side-by-side run inspector comparing summary metrics and prompt logs.
-8. **Interactive Leaderboard:** Domain-specific (Math, QA, RAG, Safety) rankings by accuracy, cost, and latency.
+8. **Multi-Run Temperature Sweeps:** Concurrently schedules evaluations across a temperature range (`0.2`, `0.4`, `0.6`, `0.8`, `1.0`) and renders trends on interactive SVG line plots.
+9. **Grid Search Hyperparameter Sweeps:** Computes the Cartesian product of selected prompts, temperatures, and top_p values, auto-scheduling all combinations in the job queue. Displays estimates dynamically and plots grouped multi-line curves in the analyzer.
+10. **Standardized Benchmarks Suite:** Built-in support for industry benchmarks (MMLU, GSM8K, HumanEval, TruthfulQA, HellaSwag, ARC, BBH) with card-based configuration launchers and real-time execution progress bar fills.
+11. **Cost & Performance Dashboard:** Multi-dimensional 2D SVG bubble scatter chart mapping Accuracy (Y-axis) vs Latency (X-axis) vs operational token Cost (bubble size & color). Focuses hovered nodes and outputs exact stats inside a details inspector. Highlights efficiency winners (Efficiency Champion, Speed Demon, Peak Performer).
+12. **Multi-Format Report Export:** Generates polished Markdown, base64-self-contained HTML, and ReportLab PDF documents detailing parameter configurations, metrics grids, Pillow visual charts, failure analyses, and recommendations.
 
 ---
 
@@ -66,15 +70,15 @@ The platform is designed around a decoupled, thread-safe asynchronous architectu
 ```text
 llm-evaluation-platform/
 ├── backend/
-│   ├── main.py                 # FastAPI application routes & seed generator
+│   ├── main.py                 # FastAPI application routes, grid orchestrator, & seed generator
 │   ├── db.py                   # SQLAlchemy connection & WAL mode pragmas
-│   ├── models.py               # Database schemas (Datasets, Models, Jobs, etc.)
-│   ├── schemas.py              # Pydantic serialization models
+│   ├── models.py               # Database schemas (Datasets, Models, Jobs, Experiments)
+│   ├── schemas.py              # Pydantic serialization models & sweep payloads
 │   ├── queue_engine.py         # DB-backed Job queue worker pool & lease sweeper
 │   ├── inference_engine.py     # Adapters (Mock, OpenAI, Anthropic, Gemini, Ollama)
 │   ├── evaluation_engine.py    # Metric plugins (BLEU, ROUGE, RAG, Safety, LLM-Judge)
 │   ├── failure_analyzer.py     # Log diagnostics and failure clustering
-│   ├── reporter.py             # Markdown and styled HTML export generators
+│   ├── reporter.py             # PIL metrics chart plotting & ReportLab PDF compilation
 │   └── tests/
 │       └── test_evaluation_platform.py  # Unit test suite
 ├── frontend/
@@ -85,12 +89,13 @@ llm-evaluation-platform/
 │   │   ├── index.css           # Custom Emerald/Graphite design system stylesheet
 │   │   ├── App.jsx             # React layout nav shell
 │   │   └── views/
-│   │       ├── Dashboard.jsx   # Stats, SVG charts, and queue metrics
+│   │       ├── Dashboard.jsx   # Stats, HTML/MD/PDF report downloads, & queue stats
 │   │       ├── Datasets.jsx    # Dataset list and additions
 │   │       ├── Models.jsx      # Model endpoint configs
 │   │       ├── Prompts.jsx     # Prompt engineering sandbox
-│   │       ├── Experiments.jsx # Launcher form and side-by-side model comparator
-│   │       ├── Leaderboards.jsx# Rankings by accuracy, cost, and latency
+│   │       ├── Experiments.jsx # Launcher sweeps, sidebar inspector, & SVG comparisons
+│   │       ├── Leaderboards.jsx# Accuracy vs. Latency vs. Cost Bubble Dashboard
+│   │       ├── Benchmarks.jsx  # Standard benchmark card launchers & live progress bars
 │   │       └── FailureAnalysis.jsx # Failure diagnostics categorized lists
 └── README.md
 ```
@@ -112,7 +117,7 @@ python3 -m venv .venv
 # Activate and install packages
 source .venv/bin/activate
 pip install --upgrade pip
-pip install fastapi uvicorn sqlalchemy pytest pydantic requests jinja2
+pip install fastapi uvicorn sqlalchemy pytest pydantic requests jinja2 reportlab pillow
 ```
 
 ### 2. Compile Frontend Assets
@@ -135,7 +140,7 @@ Open **[http://localhost:8000/](http://localhost:8000/)** in your browser to vie
 
 ## 🧪 Running Automated Tests
 
-Run the test suite checking the database job queue, metric plugins, and adapters:
+Run the test suite checking the database job queue, metric plugins, sweep orchestrations, report exporters, and adapters:
 ```bash
 PYTHONPATH=. .venv/bin/pytest backend/tests/
 ```
