@@ -89,7 +89,7 @@ export default function FailureAnalysis({ runId, setRunId }) {
                 }}
               >
                 <strong style={{ display: "block", fontSize: "13px", color: "var(--text-main)" }}>
-                  {run.experiment_id.replace("exp_run_", "").replace("exp_", "").slice(0, 20)}...
+                  Experiment #{run.experiment_id}
                 </strong>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Run ID: {run.id.slice(0, 8)}...</span>
               </div>
