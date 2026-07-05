@@ -27,6 +27,15 @@ from backend.reporter import ReportGenerator
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("main")
 
+def get_git_commit() -> Optional[str]:
+    import subprocess
+    try:
+        # Query short HEAD git commit
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode("utf-8").strip()
+        return commit[:7]
+    except Exception:
+        return "unknown"
+
 app = FastAPI(title="Generic ML Experimentation and Evaluation Platform")
 
 # Allow CORS
@@ -397,7 +406,12 @@ def seed_db(db: Session):
         Dataset(id="mmlu_qa", name="MMLU QA", version="1.0", task="QA", license="CC-BY", num_samples=25, avg_tokens=85, splits=["test"], metadata_info={"domain": "multitask language understanding"}),
         Dataset(id="rag_bench", name="RAG Benchmark", version="1.0", task="RAG", license="Apache-2.0", num_samples=15, avg_tokens=450, splits=["test"], metadata_info={"domain": "question answering over documents"}),
         Dataset(id="agent_eval", name="Agent Core", version="1.0", task="Agent", license="MIT", num_samples=8, avg_tokens=320, splits=["test"], metadata_info={"domain": "tool call execution flow"}),
-        Dataset(id="safety_check", name="Safety Guard", version="1.0", task="Safety", license="MIT", num_samples=10, avg_tokens=65, splits=["test"], metadata_info={"domain": "jailbreak and toxicity refusal"})
+        Dataset(id="safety_check", name="Safety Guard", version="1.0", task="Safety", license="MIT", num_samples=10, avg_tokens=65, splits=["test"], metadata_info={"domain": "jailbreak and toxicity refusal"}),
+        Dataset(id="human_eval", name="HumanEval Coding", version="1.0", task="Coding", license="MIT", num_samples=15, avg_tokens=210, splits=["test"], metadata_info={"domain": "python coding correctness"}),
+        Dataset(id="truthful_qa", name="TruthfulQA", version="1.0", task="Safety", license="CC-BY", num_samples=12, avg_tokens=95, splits=["test"], metadata_info={"domain": "truthfulness and cognitive fallacies"}),
+        Dataset(id="hellaswag", name="HellaSwag", version="1.1", task="Reasoning", license="MIT", num_samples=20, avg_tokens=180, splits=["test"], metadata_info={"domain": "commonsense reasoning QA"}),
+        Dataset(id="arc_challenge", name="ARC Challenge", version="1.0", task="QA", license="CC-BY", num_samples=15, avg_tokens=110, splits=["test"], metadata_info={"domain": "grade school science questions"}),
+        Dataset(id="bbh_reasoning", name="BBH Reasoning", version="1.0", task="Reasoning", license="MIT", num_samples=10, avg_tokens=290, splits=["test"], metadata_info={"domain": "big bench hard multi-step reasoning"})
     ]
     for d in datasets:
         db.add(d)
@@ -448,24 +462,26 @@ def seed_completed_runs(db: Session):
     ]
     
     for rid, mid, did, pid, task, accuracy, lat_avg, cost_total, samples_logs in runs_metadata:
-        exp_id = f"exp_{rid}"
-        
-        # Create experiment
+        # Create experiment with explicit mock versions
         exp = Experiment(
-            id=exp_id,
             name=f"Baseline {mid.split('/')[-1]} on {did.split('_')[0]}",
             model_id=mid,
             dataset_id=did,
             prompt_id=pid,
+            dataset_version="1.2" if "gsm8k" in did else "1.0",
+            model_version="2024-05-13" if "gpt" in mid else "3.0",
+            prompt_version="2.0" if pid == "cot_v2" else "1.0",
+            evaluation_version="1.0.0",
+            git_commit="a1b2c3d",
             status="completed"
         )
         db.add(exp)
+        db.flush() # Force ID generation
         
-        # Create run
         now = datetime.datetime.utcnow()
         run = EvaluationRun(
             id=rid,
-            experiment_id=exp_id,
+            experiment_id=exp.id,
             status="completed",
             progress=100.0,
             started_at=now - datetime.timedelta(minutes=5),
@@ -473,7 +489,6 @@ def seed_completed_runs(db: Session):
         )
         db.add(run)
         
-        # Create logs
         for idx, (question, ground_truth, generated, metrics, is_failure, fail_cat) in enumerate(samples_logs):
             log = EvaluationLog(
                 id=f"log_{rid}_{idx}",
@@ -585,13 +600,30 @@ def list_experiments(db: Session = Depends(get_db)):
 
 @app.post("/api/experiments", response_model=ExperimentResponse)
 def create_experiment(exp: ExperimentCreate, db: Session = Depends(get_db)):
-    exp_id = str(uuid.uuid4())
+    # Query versions of registries
+    dataset = db.query(Dataset).filter(Dataset.id == exp.dataset_id).first()
+    model = db.query(Model).filter(Model.id == exp.model_id).first()
+    prompt = db.query(Prompt).filter(Prompt.id == exp.prompt_id).first()
+    
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    git_commit = get_git_commit()
+
     db_exp = Experiment(
-        id=exp_id,
         name=exp.name,
         model_id=exp.model_id,
         dataset_id=exp.dataset_id,
         prompt_id=exp.prompt_id,
+        dataset_version=dataset.version,
+        model_version=model.version,
+        prompt_version=prompt.version,
+        evaluation_version="1.0.0",
+        git_commit=git_commit,
         temperature=exp.temperature,
         top_p=exp.top_p,
         max_tokens=exp.max_tokens,
@@ -605,7 +637,7 @@ def create_experiment(exp: ExperimentCreate, db: Session = Depends(get_db)):
 
 
 @app.post("/api/evaluate", response_model=EvaluationRunResponse)
-def trigger_evaluation(experiment_id: str, db: Session = Depends(get_db)):
+def trigger_evaluation(experiment_id: int, db: Session = Depends(get_db)):
     """
     Creates an EvaluationRun entry and queues a background 'run_evaluation' job.
     """
@@ -641,9 +673,23 @@ def trigger_evaluation(experiment_id: str, db: Session = Depends(get_db)):
     return run
 
 
-@app.get("/api/results", response_model=List[EvaluationRunResponse])
+@app.get("/api/results")
 def list_results(db: Session = Depends(get_db)):
-    return db.query(EvaluationRun).order_by(EvaluationRun.started_at.desc()).all()
+    runs = db.query(EvaluationRun).order_by(EvaluationRun.started_at.desc()).all()
+    results = []
+    for r in runs:
+        results.append({
+            "id": r.id,
+            "experiment_id": r.experiment_id,
+            "status": r.status,
+            "error_message": r.error_message,
+            "progress": r.progress,
+            "started_at": r.started_at,
+            "completed_at": r.completed_at,
+            "model_name": r.experiment.model.name if r.experiment and r.experiment.model else "Unknown",
+            "dataset_name": r.experiment.dataset.name if r.experiment and r.experiment.dataset else "Unknown"
+        })
+    return results
 
 
 @app.get("/api/results/{run_id}", response_model=RunDetailResponse)

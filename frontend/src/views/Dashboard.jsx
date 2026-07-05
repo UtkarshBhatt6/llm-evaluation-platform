@@ -265,8 +265,8 @@ export default function Dashboard({ setView, setSelectedRunId }) {
                   <td className="strong" style={{ fontFamily: "monospace", fontSize: "13px" }}>
                     {run.id.slice(0, 8)}...
                   </td>
-                  <td>{run.experiment_id.replace("exp_run_", "").slice(0, 15)}...</td>
-                  <td>{run.experiment_id.includes("math") ? "GSM8K Math" : "RAG Benchmark"}</td>
+                  <td>{run.model_name || `Model (${run.experiment_id})`}</td>
+                  <td>{run.dataset_name || `Dataset (${run.experiment_id})`}</td>
                   <td style={{ width: "20%" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                       <div className="progress-bar-container" style={{ flex: 1 }}>

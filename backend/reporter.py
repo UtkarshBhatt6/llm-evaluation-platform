@@ -214,7 +214,7 @@ class ReportGenerator:
                         </tr>
                     </thead>
                     <tbody>
-                        {metrics_summary_rows := metrics_rows}
+                        {metrics_rows}
                     </tbody>
                 </table>
 

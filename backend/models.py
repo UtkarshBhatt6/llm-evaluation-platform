@@ -50,11 +50,19 @@ class Prompt(Base):
 
 class Experiment(Base):
     __tablename__ = "experiments"
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
     model_id = Column(String, ForeignKey("models.id"), nullable=False)
     dataset_id = Column(String, ForeignKey("datasets.id"), nullable=False)
     prompt_id = Column(String, ForeignKey("prompts.id"), nullable=False)
+    
+    # Reproducibility tracking metadata
+    dataset_version = Column(String, nullable=False)
+    model_version = Column(String, nullable=False)
+    prompt_version = Column(String, nullable=False)
+    evaluation_version = Column(String, nullable=False, default="1.0.0")
+    git_commit = Column(String, nullable=True)
+
     temperature = Column(Float, default=0.7)
     top_p = Column(Float, default=0.95)
     max_tokens = Column(Integer, default=512)
@@ -72,7 +80,7 @@ class Experiment(Base):
 class EvaluationRun(Base):
     __tablename__ = "evaluation_runs"
     id = Column(String, primary_key=True)
-    experiment_id = Column(String, ForeignKey("experiments.id"), nullable=False)
+    experiment_id = Column(Integer, ForeignKey("experiments.id", ondelete="CASCADE"), nullable=False)
     status = Column(String, default="pending")  # pending, running, completed, failed
     error_message = Column(Text, nullable=True)
     progress = Column(Float, default=0.0)  # progress percentage from 0.0 to 100.0

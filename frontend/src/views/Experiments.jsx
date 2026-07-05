@@ -48,10 +48,10 @@ export default function Experiments() {
       setPrompts(dataPrompts);
       setCompletedRuns(dataRuns.filter(r => r.status === "completed"));
       
-      // Select first options as defaults in launcher form
-      if (dataModels.length) setModelId(dataModels[0].id);
-      if (dataDatasets.length) setDatasetId(dataDatasets[0].id);
-      if (dataPrompts.length) setPromptId(dataPrompts[0].id);
+      // Select first options as defaults in launcher form (do not overwrite active selections)
+      if (dataModels.length) setModelId(prev => prev || dataModels[0].id);
+      if (dataDatasets.length) setDatasetId(prev => prev || dataDatasets[0].id);
+      if (dataPrompts.length) setPromptId(prev => prev || dataPrompts[0].id);
       
       setLoading(false);
     } catch (err) {
@@ -61,6 +61,9 @@ export default function Experiments() {
 
   useEffect(() => {
     fetchRegistryData();
+    // Poll experiments list and results statuses automatically every 3 seconds
+    const interval = setInterval(fetchRegistryData, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleLaunch = async (e) => {
@@ -153,7 +156,7 @@ export default function Experiments() {
                 <select className="form-select" value={runAId} onChange={(e) => setRunAId(e.target.value)}>
                   <option value="">-- Choose Completed Run --</option>
                   {completedRuns.map(r => (
-                    <option key={r.id} value={r.id}>{r.experiment_id.replace("exp_run_", "")} (Run: {r.id.slice(0, 8)})</option>
+                    <option key={r.id} value={r.id}>Experiment #{r.experiment_id} (Run: {r.id.slice(0, 8)})</option>
                   ))}
                 </select>
               </div>
@@ -162,7 +165,7 @@ export default function Experiments() {
                 <select className="form-select" value={runBId} onChange={(e) => setRunBId(e.target.value)}>
                   <option value="">-- Choose Completed Run --</option>
                   {completedRuns.map(r => (
-                    <option key={r.id} value={r.id}>{r.experiment_id.replace("exp_run_", "")} (Run: {r.id.slice(0, 8)})</option>
+                    <option key={r.id} value={r.id}>Experiment #{r.experiment_id} (Run: {r.id.slice(0, 8)})</option>
                   ))}
                 </select>
               </div>
@@ -225,6 +228,91 @@ export default function Experiments() {
                         <td>{((runBDetail.metrics_summary.faithfulness - runADetail.metrics_summary.faithfulness) * 100).toFixed(0)}%</td>
                       </tr>
                     )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Reproducibility Version Matrix */}
+              <div className="panel">
+                <div className="panel-header">
+                  <span className="panel-title">Reproducibility & Version Matrix</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>Experiment #{runADetail.experiment.id} vs. Experiment #{runBDetail.experiment.id}</span>
+                </div>
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Parameters & Versions</th>
+                      <th style={{ color: "var(--emerald-bright)" }}>Run A: {runADetail.model.name}</th>
+                      <th style={{ color: "#58a6ff" }}>Run B: {runBDetail.model.name}</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Git Commit */}
+                    <tr>
+                      <td className="strong">Git Commit Hash</td>
+                      <td style={{ fontFamily: "monospace", fontSize: "13px" }}>{runADetail.experiment.git_commit || "N/A"}</td>
+                      <td style={{ fontFamily: "monospace", fontSize: "13px" }}>{runBDetail.experiment.git_commit || "N/A"}</td>
+                      <td>
+                        {runADetail.experiment.git_commit === runBDetail.experiment.git_commit ? (
+                          <span style={{ color: "var(--emerald-bright)", fontSize: "12px" }}>✓ Identical Codebase</span>
+                        ) : (
+                          <span style={{ color: "var(--warning-neon)", fontSize: "12px" }}>⚠️ Codebase Delta</span>
+                        )}
+                      </td>
+                    </tr>
+                    {/* Model Version */}
+                    <tr>
+                      <td className="strong">Model Config Version</td>
+                      <td>v{runADetail.experiment.model_version} ({runADetail.model.provider})</td>
+                      <td>v{runBDetail.experiment.model_version} ({runBDetail.model.provider})</td>
+                      <td>
+                        {runADetail.experiment.model_version === runBDetail.experiment.model_version ? "Identical" : "Delta"}
+                      </td>
+                    </tr>
+                    {/* Dataset Version */}
+                    <tr>
+                      <td className="strong">Dataset Config Version</td>
+                      <td>v{runADetail.experiment.dataset_version} ({runADetail.dataset.task})</td>
+                      <td>v{runBDetail.experiment.dataset_version} ({runBDetail.dataset.task})</td>
+                      <td>
+                        {runADetail.experiment.dataset_version === runBDetail.experiment.dataset_version ? "Identical" : "Delta"}
+                      </td>
+                    </tr>
+                    {/* Prompt Version */}
+                    <tr>
+                      <td className="strong">Prompt Template Version</td>
+                      <td>v{runADetail.experiment.prompt_version} ({runADetail.experiment.prompt_id})</td>
+                      <td>v{runBDetail.experiment.prompt_version} ({runBDetail.experiment.prompt_id})</td>
+                      <td>
+                        {runADetail.experiment.prompt_version === runBDetail.experiment.prompt_version ? "Identical" : "Delta"}
+                      </td>
+                    </tr>
+                    {/* Evaluation Version */}
+                    <tr>
+                      <td className="strong">Eval Engine Version</td>
+                      <td>v{runADetail.experiment.evaluation_version || "1.0.0"}</td>
+                      <td>v{runBDetail.experiment.evaluation_version || "1.0.0"}</td>
+                      <td>Identical</td>
+                    </tr>
+                    {/* Hyperparameters */}
+                    <tr>
+                      <td className="strong">Hyperparameters (Temp / Top-P)</td>
+                      <td>T={runADetail.experiment.temperature} • P={runADetail.experiment.top_p}</td>
+                      <td>T={runBDetail.experiment.temperature} • P={runBDetail.experiment.top_p}</td>
+                      <td>
+                        {runADetail.experiment.temperature === runBDetail.experiment.temperature && runADetail.experiment.top_p === runBDetail.experiment.top_p ? "Identical" : "Delta"}
+                      </td>
+                    </tr>
+                    {/* Random Seed */}
+                    <tr>
+                      <td className="strong">Random Seed</td>
+                      <td>Seed={runADetail.experiment.seed}</td>
+                      <td>Seed={runBDetail.experiment.seed}</td>
+                      <td>
+                        {runADetail.experiment.seed === runBDetail.experiment.seed ? "Identical" : "Delta"}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -428,7 +516,7 @@ export default function Experiments() {
               <tbody>
                 {experiments.map((exp) => (
                   <tr key={exp.id}>
-                    <td className="strong" style={{ fontFamily: "monospace", fontSize: "13px" }}>{exp.id.slice(0, 8)}...</td>
+                    <td className="strong">Experiment #{exp.id}</td>
                     <td>{exp.name}</td>
                     <td>{exp.model_id.replace("openai/", "").replace("meta/", "").replace("gemini/", "")}</td>
                     <td>{exp.dataset_id}</td>

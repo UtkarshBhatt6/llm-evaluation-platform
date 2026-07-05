@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Import backend elements
 from backend.db import Base
-from backend.models import Job
+from backend.models import Job, Experiment, Model, Dataset, Prompt
 from backend.queue_engine import QueueEngine, RetryPolicy
 from backend.inference_engine import MockAdapter
 from backend.evaluation_engine import (
@@ -179,3 +179,61 @@ def test_rag_evaluator():
     # Unfaithful / Hallucinated answer
     res_hallucinated = evaluator.evaluate("The solar utility was established back in 1999.", ground_truth="2014", context=context)
     assert res_hallucinated["faithfulness"] < 0.3
+
+
+def test_experiment_sequential_tracking():
+    engine = create_engine("sqlite:///:memory:")
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    Base.metadata.create_all(bind=engine)
+
+    # Add mock elements
+    m = Model(id="model_1", name="Model 1", version="1.0", provider="Mock")
+    d = Dataset(id="dataset_1", name="Dataset 1", version="2.0", task="Math")
+    p = Prompt(id="prompt_1", name="Prompt 1", version="3.0", content="content", task="Math")
+    session.add_all([m, d, p])
+    session.commit()
+
+    # Import main helper to verify git commit logic
+    from backend.main import get_git_commit
+    git_commit = get_git_commit()
+
+    # Create Experiment 1
+    exp1 = Experiment(
+        name="Experiment Alpha",
+        model_id="model_1",
+        dataset_id="dataset_1",
+        prompt_id="prompt_1",
+        dataset_version=d.version,
+        model_version=m.version,
+        prompt_version=p.version,
+        evaluation_version="1.0.0",
+        git_commit=git_commit,
+        status="pending"
+    )
+    session.add(exp1)
+    session.commit()
+
+    # Create Experiment 2
+    exp2 = Experiment(
+        name="Experiment Beta",
+        model_id="model_1",
+        dataset_id="dataset_1",
+        prompt_id="prompt_1",
+        dataset_version=d.version,
+        model_version=m.version,
+        prompt_version=p.version,
+        evaluation_version="1.0.0",
+        git_commit=git_commit,
+        status="pending"
+    )
+    session.add(exp2)
+    session.commit()
+
+    assert exp1.id == 1
+    assert exp2.id == 2
+    assert exp1.dataset_version == "2.0"
+    assert exp1.model_version == "1.0"
+    assert exp1.prompt_version == "3.0"
+    assert exp1.evaluation_version == "1.0.0"
+    assert exp1.git_commit is not None

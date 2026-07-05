@@ -61,11 +61,16 @@ class ExperimentCreate(BaseModel):
     seed: int = 42
 
 class ExperimentResponse(BaseModel):
-    id: str
+    id: int
     name: str
     model_id: str
     dataset_id: str
     prompt_id: str
+    dataset_version: str
+    model_version: str
+    prompt_version: str
+    evaluation_version: str
+    git_commit: Optional[str] = None
     temperature: float
     top_p: float
     max_tokens: int
@@ -79,7 +84,7 @@ class ExperimentResponse(BaseModel):
 
 class EvaluationRunResponse(BaseModel):
     id: str
-    experiment_id: str
+    experiment_id: int
     status: str
     error_message: Optional[str] = None
     progress: float

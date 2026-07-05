@@ -130,7 +130,10 @@ class QueueEngine:
                 db.rollback()
             except Exception as e:
                 db.rollback()
-                logger.error(f"Error in dequeue transaction: {e}")
+                if "no such table" in str(e).lower():
+                    logger.debug("Queue table 'jobs' is not yet initialized. Retrying on next poll.")
+                else:
+                    logger.error(f"Error in dequeue transaction: {e}")
             finally:
                 db.close()
             time.sleep(0.01)  # 10ms backoff
@@ -385,7 +388,10 @@ class WorkerPool:
                     if self.on_state_change:
                         self.on_state_change()
             except Exception as e:
-                logger.error(f"[Sweeper] Error in sweeping loop: {e}")
+                if "no such table" in str(e).lower():
+                    logger.debug("[Sweeper] Jobs table is not yet initialized. Skipping sweep.")
+                else:
+                    logger.error(f"[Sweeper] Error in sweeping loop: {e}")
             
             # Sleep in increments checking for stop events
             for _ in range(int(self.sweeper_interval * 10)):

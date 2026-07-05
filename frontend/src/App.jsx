@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import Dashboard from "./views/Dashboard";
 import Datasets from "./views/Datasets";
+import Benchmarks from "./views/Benchmarks";
 import Models from "./views/Models";
 import Prompts from "./views/Prompts";
 import Experiments from "./views/Experiments";
@@ -33,6 +34,8 @@ export default function App() {
     switch (view) {
       case "dashboard":
         return <Dashboard setView={setView} setSelectedRunId={setSelectedRunId} />;
+      case "benchmarks":
+        return <Benchmarks />;
       case "datasets":
         return <Datasets />;
       case "models":
@@ -64,6 +67,7 @@ export default function App() {
         {/* Header Tabs */}
         <nav className="nav-links">
           <button className={`nav-tab ${view === "dashboard" ? "active" : ""}`} onClick={() => setView("dashboard")}>Dashboard</button>
+          <button className={`nav-tab ${view === "benchmarks" ? "active" : ""}`} onClick={() => setView("benchmarks")}>Benchmark Suite</button>
           <button className={`nav-tab ${view === "datasets" ? "active" : ""}`} onClick={() => setView("datasets")}>Datasets</button>
           <button className={`nav-tab ${view === "models" ? "active" : ""}`} onClick={() => setView("models")}>Models</button>
           <button className={`nav-tab ${view === "prompts" ? "active" : ""}`} onClick={() => setView("prompts")}>Prompts</button>
