@@ -316,3 +316,58 @@ def test_grid_sweep_orchestration(db_session):
     assert len(jobs) == 12
     assert all(j.type == "run_evaluation" for j in jobs)
 
+
+def test_report_generation():
+    import os
+    import shutil
+    from backend.reporter import ReportGenerator
+
+    run_id = "test_run_123"
+    report_dir = "./test_reports_out"
+    
+    run_data = {
+        "id": run_id,
+        "status": "completed",
+        "duration_seconds": 45.5,
+        "experiment": {
+            "prompt_id": "prompt_test",
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "max_tokens": 128,
+            "seed": 42
+        },
+        "metrics_summary": {
+            "accuracy": 0.85,
+            "latency": 1.25,
+            "cost": 0.005
+        }
+    }
+    
+    model_data = {"name": "Test LLM", "version": "1.0", "provider": "OpenAI"}
+    dataset_data = {"name": "Test DS", "version": "2.0", "task": "classification"}
+    logs = []
+    failures = {
+        "format_error": [{"input_text": "sample query input text for failure"}]
+    }
+
+    # Clean prior test runs
+    if os.path.exists(report_dir):
+        shutil.rmtree(report_dir)
+
+    # Generate
+    paths = ReportGenerator.export_report(report_dir, run_data, model_data, dataset_data, logs, failures)
+
+    assert os.path.exists(paths["markdown_path"])
+    assert os.path.exists(paths["html_path"])
+    assert os.path.exists(paths["pdf_path"])
+    assert os.path.exists(paths["plot_path"])
+
+    assert os.path.getsize(paths["markdown_path"]) > 0
+    assert os.path.getsize(paths["html_path"]) > 0
+    assert os.path.getsize(paths["pdf_path"]) > 0
+    assert os.path.getsize(paths["plot_path"]) > 0
+
+    # Cleanup
+    shutil.rmtree(report_dir)
+
+

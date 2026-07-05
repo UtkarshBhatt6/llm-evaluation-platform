@@ -300,9 +300,25 @@ export default function Dashboard({ setView, setSelectedRunId }) {
                         href={`http://localhost:8000/api/reports/${run.id}?format=html`}
                         download
                         className="btn-primary"
-                        style={{ padding: "6px 12px", fontSize: "12px", textDecoration: "none", opacity: run.status !== "completed" ? 0.5 : 1, pointerEvents: run.status !== "completed" ? "none" : "auto" }}
+                        style={{ padding: "6px 10px", fontSize: "12px", textDecoration: "none", opacity: run.status !== "completed" ? 0.5 : 1, pointerEvents: run.status !== "completed" ? "none" : "auto" }}
                       >
-                        Report
+                        HTML
+                      </a>
+                      <a
+                        href={`http://localhost:8000/api/reports/${run.id}?format=md`}
+                        download
+                        className="btn-secondary"
+                        style={{ padding: "6px 10px", fontSize: "12px", textDecoration: "none", opacity: run.status !== "completed" ? 0.5 : 1, pointerEvents: run.status !== "completed" ? "none" : "auto" }}
+                      >
+                        MD
+                      </a>
+                      <a
+                        href={`http://localhost:8000/api/reports/${run.id}?format=pdf`}
+                        download
+                        className="btn-primary"
+                        style={{ padding: "6px 10px", fontSize: "12px", textDecoration: "none", opacity: run.status !== "completed" ? 0.5 : 1, pointerEvents: run.status !== "completed" ? "none" : "auto", backgroundColor: "#2563eb", borderColor: "#2563eb" }}
+                      >
+                        PDF
                       </a>
                     </div>
                   </td>

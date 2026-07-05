@@ -934,12 +934,21 @@ def get_leaderboard(task: Optional[str] = None, db: Session = Depends(get_db)):
 
 @app.get("/api/reports/{run_id}")
 def download_report(run_id: str, format: str = "html", db: Session = Depends(get_db)):
-    """Returns static exported HTML or Markdown report file."""
+    """Returns static exported HTML, Markdown, or PDF report file."""
     run = db.query(EvaluationRun).filter(EvaluationRun.id == run_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
         
-    ext = "html" if format == "html" else "md"
+    if format == "pdf":
+        ext = "pdf"
+        media_type = "application/pdf"
+    elif format == "html":
+        ext = "html"
+        media_type = "text/html"
+    else:
+        ext = "md"
+        media_type = "text/markdown"
+
     file_path = os.path.join("./reports", f"report_{run_id}.{ext}")
     
     if not os.path.exists(file_path):
@@ -962,7 +971,7 @@ def download_report(run_id: str, format: str = "html", db: Session = Depends(get
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Failed to compile report file")
         
-    return FileResponse(file_path, media_type="application/octet-stream", filename=f"report_{run_id}.{ext}")
+    return FileResponse(file_path, media_type=media_type, filename=f"report_{run_id}.{ext}")
 
 
 @app.get("/api/jobs/stats", response_model=JobStats)
