@@ -1,4 +1,4 @@
-# Generic ML Experimentation and Evaluation Platform
+# LLM Experimentation & Evaluation Platform
 
 An enterprise-grade ML experimentation and evaluation platform designed to register datasets, models, and prompts, run parallel evaluations using a database-backed reliable job queue, calculate complex NLP/agent metrics, diagnose failure clusters, and compare results inside an interactive dashboard.
 
