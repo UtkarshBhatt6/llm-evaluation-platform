@@ -356,6 +356,19 @@ def startup_event():
     # Initialize DB schemas
     Base.metadata.create_all(bind=engine)
     
+    # Run inline SQLite schema migration for datasets.samples column if missing
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            result = conn.execute(text("PRAGMA table_info(datasets)")).fetchall()
+            columns = [row[1] for row in result]
+            if "samples" not in columns:
+                logger.info("Migrating database schema: Adding 'samples' column to 'datasets' table")
+                conn.execute(text("ALTER TABLE datasets ADD COLUMN samples JSON"))
+                conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to auto-migrate sqlite schema: {e}")
+    
     db = SessionLocal()
     # Seed tables with robust mock setup records if empty
     seed_db(db)
