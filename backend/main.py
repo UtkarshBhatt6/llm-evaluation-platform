@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from backend.db import engine, Base, get_db, SessionLocal
 from backend.models import Dataset, Model, Prompt, Experiment, EvaluationRun, EvaluationLog, Job
 from backend.schemas import (
-    DatasetResponse, ModelResponse, PromptResponse, ExperimentCreate,
+    DatasetResponse, ModelResponse, PromptResponse, ExperimentCreate, ExperimentSweepCreate, ExperimentGridSweepCreate,
     ExperimentResponse, EvaluationRunResponse, RunDetailResponse, JobStats, LeaderboardEntry
 )
 from backend.queue_engine import QueueEngine, WorkerPool, RetryPolicy
@@ -634,6 +634,152 @@ def create_experiment(exp: ExperimentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_exp)
     return db_exp
+
+
+@app.post("/api/experiments/sweep", response_model=List[EvaluationRunResponse])
+def create_experiment_sweep(sweep: ExperimentSweepCreate, db: Session = Depends(get_db)):
+    """
+    Spawns multiple parallel experiments and evaluation runs across a sweep list of temperatures.
+    """
+    dataset = db.query(Dataset).filter(Dataset.id == sweep.dataset_id).first()
+    model = db.query(Model).filter(Model.id == sweep.model_id).first()
+    prompt = db.query(Prompt).filter(Prompt.id == sweep.prompt_id).first()
+    
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+
+    git_commit = get_git_commit()
+    runs = []
+
+    for temp in sweep.temperatures:
+        db_exp = Experiment(
+            name=f"{sweep.name} (T={temp:.1f})",
+            model_id=sweep.model_id,
+            dataset_id=sweep.dataset_id,
+            prompt_id=sweep.prompt_id,
+            dataset_version=dataset.version,
+            model_version=model.version,
+            prompt_version=prompt.version,
+            evaluation_version="1.0.0",
+            git_commit=git_commit,
+            temperature=temp,
+            top_p=sweep.top_p,
+            max_tokens=sweep.max_tokens,
+            seed=sweep.seed,
+            status="running"
+        )
+        db.add(db_exp)
+        db.flush() # Generate integer ID
+
+        run_id = str(uuid.uuid4())
+        run = EvaluationRun(
+            id=run_id,
+            experiment_id=db_exp.id,
+            status="pending",
+            progress=0.0
+        )
+        db.add(run)
+        db.flush()
+
+        # Enqueue in Reliable Job Queue
+        job_id = f"job_eval_{run_id}"
+        QueueEngine.enqueue(
+            db=db,
+            job_id=job_id,
+            job_type="run_evaluation",
+            payload={"run_id": run_id},
+            queue="default",
+            priority=1
+        )
+        runs.append(run)
+
+    db.commit()
+    for r in runs:
+        db.refresh(r)
+    return runs
+
+
+@app.post("/api/experiments/grid-sweep", response_model=List[EvaluationRunResponse])
+def create_experiment_grid_sweep(sweep: ExperimentGridSweepCreate, db: Session = Depends(get_db)):
+    """
+    Computes the Cartesian product of prompts, temperatures, and top_p values, 
+    registers a distinct Experiment, and enqueues EvaluationRuns for all combinations.
+    """
+    import itertools
+
+    dataset = db.query(Dataset).filter(Dataset.id == sweep.dataset_id).first()
+    model = db.query(Model).filter(Model.id == sweep.model_id).first()
+    
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    # Validate that prompts exist and build a map of prompt objects
+    prompts_map = {}
+    for pid in sweep.prompt_ids:
+        p = db.query(Prompt).filter(Prompt.id == pid).first()
+        if not p:
+            raise HTTPException(status_code=404, detail=f"Prompt '{pid}' not found")
+        prompts_map[pid] = p
+
+    git_commit = get_git_commit()
+    runs = []
+
+    # Compute Cartesian product of combinations: (prompt_id, temperature, top_p)
+    combinations = list(itertools.product(sweep.prompt_ids, sweep.temperatures, sweep.top_ps))
+
+    for pid, temp, top_p in combinations:
+        prompt_obj = prompts_map[pid]
+        db_exp = Experiment(
+            name=f"{sweep.name} (P={pid}, T={temp:.2f}, P={top_p:.2f})",
+            model_id=sweep.model_id,
+            dataset_id=sweep.dataset_id,
+            prompt_id=pid,
+            dataset_version=dataset.version,
+            model_version=model.version,
+            prompt_version=prompt_obj.version,
+            evaluation_version="1.0.0",
+            git_commit=git_commit,
+            temperature=temp,
+            top_p=top_p,
+            max_tokens=sweep.max_tokens,
+            seed=sweep.seed,
+            status="running"
+        )
+        db.add(db_exp)
+        db.flush() # Generate ID
+
+        run_id = str(uuid.uuid4())
+        run = EvaluationRun(
+            id=run_id,
+            experiment_id=db_exp.id,
+            status="pending",
+            progress=0.0
+        )
+        db.add(run)
+        db.flush()
+
+        # Enqueue in Reliable Job Queue
+        job_id = f"job_eval_{run_id}"
+        QueueEngine.enqueue(
+            db=db,
+            job_id=job_id,
+            job_type="run_evaluation",
+            payload={"run_id": run_id},
+            queue="default",
+            priority=1
+        )
+        runs.append(run)
+
+    db.commit()
+    for r in runs:
+        db.refresh(r)
+    return runs
 
 
 @app.post("/api/evaluate", response_model=EvaluationRunResponse)

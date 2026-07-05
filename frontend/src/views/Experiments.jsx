@@ -1,5 +1,186 @@
 import React, { useState, useEffect } from "react";
 
+// Dynamic SVG Line chart for multi-run evaluations (cost, latency, and accuracy trends)
+function SweepLineChart({ data }) {
+  if (!data || data.length === 0) return null;
+
+  const width = 600;
+  const height = 280;
+  const padding = 45;
+
+  // Scale functions
+  const getX = (temp) => padding + temp * (width - 2 * padding);
+  const getY = (val) => height - padding - (val || 0) * (height - 2 * padding);
+
+  const maxLat = Math.max(...data.map(d => d.metrics_summary.avg_latency || 1.0), 2.0);
+  const getLatY = (lat) => height - padding - (lat / maxLat) * (height - 2 * padding);
+
+  // Group runs by prompt strategy
+  const groups = {};
+  data.forEach(d => {
+    const pid = d.experiment.prompt_id || "default";
+    if (!groups[pid]) {
+      groups[pid] = [];
+    }
+    groups[pid].push(d);
+  });
+
+  // Ensure each group is sorted by temperature
+  Object.keys(groups).forEach(pid => {
+    groups[pid].sort((a, b) => a.experiment.temperature - b.experiment.temperature);
+  });
+
+  // Unique line colors
+  const colors = {
+    0: "var(--emerald-bright)",
+    1: "#58a6ff",
+    2: "#d3a4ff",
+    3: "#ff9b9b",
+    4: "#ffd69b"
+  };
+  const getGroupColor = (index) => colors[index % 5];
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "20px" }}>
+      {/* Accuracy Curve */}
+      <div className="panel" style={{ padding: "15px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+          <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--emerald-bright)" }}>Temperature vs. Primary Accuracy</div>
+          {/* Chart Legend */}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {Object.keys(groups).map((pid, idx) => (
+              <span key={pid} style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", backgroundColor: getGroupColor(idx) }}></span>
+                {pid}
+              </span>
+            ))}
+          </div>
+        </div>
+        
+        <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ background: "var(--bg-dark)", borderRadius: "8px", border: "1px solid #21262d" }}>
+          {[0.2, 0.4, 0.6, 0.8, 1.0].map(t => (
+            <line key={t} x1={getX(t)} y1={padding} x2={getX(t)} y2={height - padding} stroke="#21262d" strokeDasharray="3" />
+          ))}
+          {[0.0, 0.25, 0.5, 0.75, 1.0].map(v => (
+            <line key={v} x1={padding} y1={getY(v)} x2={width - padding} y2={getY(v)} stroke="#21262d" strokeDasharray="3" />
+          ))}
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#374151" strokeWidth="2" />
+          <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#374151" strokeWidth="2" />
+          <text x={width / 2} y={height - 10} fill="var(--text-muted)" fontSize="12" textAnchor="middle">Temperature</text>
+          <text x={12} y={height / 2} fill="var(--text-muted)" fontSize="12" textAnchor="middle" transform={`rotate(-90 12 ${height / 2})`}>Accuracy (%)</text>
+          <text x={padding - 10} y={getY(0.0) + 4} fill="var(--text-muted)" fontSize="10" textAnchor="end">0%</text>
+          <text x={padding - 10} y={getY(0.5) + 4} fill="var(--text-muted)" fontSize="10" textAnchor="end">50%</text>
+          <text x={padding - 10} y={getY(1.0) + 4} fill="var(--text-muted)" fontSize="10" textAnchor="end">100%</text>
+          <text x={getX(0.0)} y={height - padding + 16} fill="var(--text-muted)" fontSize="10" textAnchor="middle">0.0</text>
+          <text x={getX(0.5)} y={height - padding + 16} fill="var(--text-muted)" fontSize="10" textAnchor="middle">0.5</text>
+          <text x={getX(1.0)} y={height - padding + 16} fill="var(--text-muted)" fontSize="10" textAnchor="middle">1.0</text>
+
+          {/* Plot curves for each group */}
+          {Object.keys(groups).map((pid, idx) => {
+            const groupData = groups[pid];
+            const pointsStr = groupData
+              .map(d => {
+                const acc = d.metrics_summary.accuracy !== undefined 
+                  ? d.metrics_summary.accuracy 
+                  : d.metrics_summary.faithfulness !== undefined
+                  ? d.metrics_summary.faithfulness
+                  : 0.0;
+                return `${getX(d.experiment.temperature)},${getY(acc)}`;
+              })
+              .filter(p => !p.includes("NaN"))
+              .join(" ");
+
+            return (
+              <g key={pid}>
+                {pointsStr && <polyline fill="none" stroke={getGroupColor(idx)} strokeWidth="3" points={pointsStr} />}
+                {groupData.map(d => {
+                  const acc = d.metrics_summary.accuracy !== undefined 
+                    ? d.metrics_summary.accuracy 
+                    : d.metrics_summary.faithfulness !== undefined
+                    ? d.metrics_summary.faithfulness
+                    : 0.0;
+                  const x = getX(d.experiment.temperature);
+                  const y = getY(acc);
+                  return (
+                    <g key={d.id}>
+                      <circle cx={x} cy={y} r="5" fill="var(--bg-dark)" stroke={getGroupColor(idx)} strokeWidth="2.5" />
+                      <text x={x} y={y - 8} fill="#e5e7eb" fontSize="9" fontWeight="bold" textAnchor="middle">{(acc * 100).toFixed(0)}%</text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Latency Curve */}
+      <div className="panel" style={{ padding: "15px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+          <div style={{ fontSize: "14px", fontWeight: "600", color: "#58a6ff" }}>Temperature vs. Avg Latency</div>
+          {/* Chart Legend */}
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {Object.keys(groups).map((pid, idx) => (
+              <span key={pid} style={{ fontSize: "11px", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", backgroundColor: getGroupColor(idx) }}></span>
+                {pid}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ background: "var(--bg-dark)", borderRadius: "8px", border: "1px solid #21262d" }}>
+          {[0.2, 0.4, 0.6, 0.8, 1.0].map(t => (
+            <line key={t} x1={getX(t)} y1={padding} x2={getX(t)} y2={height - padding} stroke="#21262d" strokeDasharray="3" />
+          ))}
+          {[0.0, 0.5, 1.0].map(pct => (
+            <line key={pct} x1={padding} y1={getY(pct)} x2={width - padding} y2={getY(pct)} stroke="#21262d" strokeDasharray="3" />
+          ))}
+          <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="#374151" strokeWidth="2" />
+          <line x1={padding} y1={padding} x2={padding} y2={height - padding} stroke="#374151" strokeWidth="2" />
+          <text x={width / 2} y={height - 10} fill="var(--text-muted)" fontSize="12" textAnchor="middle">Temperature</text>
+          <text x={12} y={height / 2} fill="var(--text-muted)" fontSize="12" textAnchor="middle" transform={`rotate(-90 12 ${height / 2})`}>Latency (s)</text>
+          <text x={padding - 10} y={getLatY(0) + 4} fill="var(--text-muted)" fontSize="10" textAnchor="end">0.0s</text>
+          <text x={padding - 10} y={getLatY(maxLat / 2) + 4} fill="var(--text-muted)" fontSize="10" textAnchor="end">{(maxLat / 2).toFixed(1)}s</text>
+          <text x={padding - 10} y={getLatY(maxLat) + 4} fill="var(--text-muted)" fontSize="10" textAnchor="end">{maxLat.toFixed(1)}s</text>
+          <text x={getX(0.0)} y={height - padding + 16} fill="var(--text-muted)" fontSize="10" textAnchor="middle">0.0</text>
+          <text x={getX(0.5)} y={height - padding + 16} fill="var(--text-muted)" fontSize="10" textAnchor="middle">0.5</text>
+          <text x={getX(1.0)} y={height - padding + 16} fill="var(--text-muted)" fontSize="10" textAnchor="middle">1.0</text>
+
+          {/* Plot curves for each group */}
+          {Object.keys(groups).map((pid, idx) => {
+            const groupData = groups[pid];
+            const latPointsStr = groupData
+              .map(d => {
+                const lat = d.metrics_summary.avg_latency || 0;
+                return `${getX(d.experiment.temperature)},${getLatY(lat)}`;
+              })
+              .filter(p => !p.includes("NaN"))
+              .join(" ");
+
+            return (
+              <g key={pid}>
+                {latPointsStr && <polyline fill="none" stroke={getGroupColor(idx)} strokeWidth="3" points={latPointsStr} />}
+                {groupData.map(d => {
+                  const lat = d.metrics_summary.avg_latency || 0;
+                  const x = getX(d.experiment.temperature);
+                  const y = getLatY(lat);
+                  return (
+                    <g key={d.id}>
+                      <circle cx={x} cy={y} r="5" fill="var(--bg-dark)" stroke={getGroupColor(idx)} strokeWidth="2.5" />
+                      <text x={x} y={y - 8} fill="#e5e7eb" fontSize="9" fontWeight="bold" textAnchor="middle">{lat.toFixed(2)}s</text>
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
 export default function Experiments() {
   const [experiments, setExperiments] = useState([]);
   const [completedRuns, setCompletedRuns] = useState([]);
@@ -27,6 +208,19 @@ export default function Experiments() {
   const [runADetail, setRunADetail] = useState(null);
   const [runBDetail, setRunBDetail] = useState(null);
   const [selectedLogIndex, setSelectedLogIndex] = useState(0);
+
+  // Sweep fields
+  const [isSweep, setIsSweep] = useState(false);
+  const [sweepTemps, setSweepTemps] = useState([0.2, 0.4, 0.6, 0.8, 1.0]);
+  const [selectedSweepRunIds, setSelectedSweepRunIds] = useState([]);
+  const [sweepRunsDetails, setSweepRunsDetails] = useState([]);
+  const [comparisonTab, setComparisonTab] = useState("side-by-side");
+
+  // Grid Sweep fields
+  const [formMode, setFormMode] = useState("single"); // "single", "sweep", "grid"
+  const [gridPromptIds, setGridPromptIds] = useState([]);
+  const [gridTemps, setGridTemps] = useState([0.2, 0.5, 0.8]);
+  const [gridTopPs, setGridTopPs] = useState([0.9, 0.95]);
 
   const fetchRegistryData = async () => {
     try {
@@ -66,41 +260,137 @@ export default function Experiments() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleLoadSweepDetails = async () => {
+    if (selectedSweepRunIds.length === 0) {
+      setSweepRunsDetails([]);
+      return;
+    }
+    try {
+      const details = await Promise.all(
+        selectedSweepRunIds.map(async (id) => {
+          const res = await fetch(`http://localhost:8000/api/results/${id}`);
+          return res.json();
+        })
+      );
+      details.sort((a, b) => a.experiment.temperature - b.experiment.temperature);
+      setSweepRunsDetails(details);
+    } catch (err) {
+      console.error("Failed to load sweep details:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (comparisonTab === "sweep-analyzer") {
+      handleLoadSweepDetails();
+    }
+  }, [selectedSweepRunIds, comparisonTab]);
+
   const handleLaunch = async (e) => {
     e.preventDefault();
-    if (!name || !modelId || !datasetId || !promptId) return;
+    if (!name || !modelId || !datasetId) return;
 
-    const payload = {
-      name,
-      model_id: modelId,
-      dataset_id: datasetId,
-      prompt_id: promptId,
-      temperature: parseFloat(temp),
-      top_p: parseFloat(topP),
-      max_tokens: parseInt(maxTokens),
-      seed: parseInt(seed)
-    };
-
-    try {
-      // 1. Create experiment
-      const resExp = await fetch("http://localhost:8000/api/experiments", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const dataExp = await resExp.json();
-      
-      if (resExp.ok) {
-        // 2. Trigger evaluate (pushes run task to reliable job queue)
-        await fetch(`http://localhost:8000/api/evaluate?experiment_id=${dataExp.id}`, { method: "POST" });
-        setShowLauncher(false);
-        fetchRegistryData();
-        setName("");
-      } else {
-        alert(`Launch Error: ${dataExp.detail}`);
+    if (formMode === "grid") {
+      if (gridPromptIds.length === 0) {
+        alert("Please select at least one prompt strategy.");
+        return;
       }
-    } catch (err) {
-      console.error("Failed to launch evaluation run:", err);
+      if (gridTemps.length === 0) {
+        alert("Please select at least one temperature.");
+        return;
+      }
+      if (gridTopPs.length === 0) {
+        alert("Please select at least one Top P value.");
+        return;
+      }
+      const payload = {
+        name,
+        model_id: modelId,
+        dataset_id: datasetId,
+        prompt_ids: gridPromptIds,
+        temperatures: gridTemps,
+        top_ps: gridTopPs,
+        max_tokens: parseInt(maxTokens),
+        seed: parseInt(seed)
+      };
+      try {
+        const res = await fetch("http://localhost:8000/api/experiments/grid-sweep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          setShowLauncher(false);
+          setFormMode("single");
+          fetchRegistryData();
+          setName("");
+        } else {
+          const errData = await res.json();
+          alert(`Grid Sweep Launch Error: ${errData.detail}`);
+        }
+      } catch (err) {
+        console.error("Failed to launch grid sweep:", err);
+      }
+    } else if (formMode === "sweep") {
+      if (!promptId) return;
+      const payload = {
+        name,
+        model_id: modelId,
+        dataset_id: datasetId,
+        prompt_id: promptId,
+        temperatures: sweepTemps,
+        top_p: parseFloat(topP),
+        max_tokens: parseInt(maxTokens),
+        seed: parseInt(seed)
+      };
+      try {
+        const res = await fetch("http://localhost:8000/api/experiments/sweep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          setShowLauncher(false);
+          setFormMode("single");
+          fetchRegistryData();
+          setName("");
+        } else {
+          const errData = await res.json();
+          alert(`Sweep Launch Error: ${errData.detail}`);
+        }
+      } catch (err) {
+        console.error("Failed to launch sweep:", err);
+      }
+    } else {
+      if (!promptId) return;
+      const payload = {
+        name,
+        model_id: modelId,
+        dataset_id: datasetId,
+        prompt_id: promptId,
+        temperature: parseFloat(temp),
+        top_p: parseFloat(topP),
+        max_tokens: parseInt(maxTokens),
+        seed: parseInt(seed)
+      };
+      try {
+        const resExp = await fetch("http://localhost:8000/api/experiments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const dataExp = await resExp.json();
+        
+        if (resExp.ok) {
+          await fetch(`http://localhost:8000/api/evaluate?experiment_id=${dataExp.id}`, { method: "POST" });
+          setShowLauncher(false);
+          fetchRegistryData();
+          setName("");
+        } else {
+          alert(`Launch Error: ${dataExp.detail}`);
+        }
+      } catch (err) {
+        console.error("Failed to launch evaluation run:", err);
+      }
     }
   };
 
@@ -146,253 +436,403 @@ export default function Experiments() {
       {compareMode ? (
         /* ------------------ COMPARISON WORKSPACE ------------------ */
         <div>
-          <div className="panel">
-            <div className="panel-header">
-              <span className="panel-title">Select Runs to Compare</span>
-            </div>
-            <div style={{ display: "flex", gap: "20px", alignItems: "flex-end" }}>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                <label className="form-label">Run A (Base Model)</label>
-                <select className="form-select" value={runAId} onChange={(e) => setRunAId(e.target.value)}>
-                  <option value="">-- Choose Completed Run --</option>
-                  {completedRuns.map(r => (
-                    <option key={r.id} value={r.id}>Experiment #{r.experiment_id} (Run: {r.id.slice(0, 8)})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                <label className="form-label">Run B (Comparison Model)</label>
-                <select className="form-select" value={runBId} onChange={(e) => setRunBId(e.target.value)}>
-                  <option value="">-- Choose Completed Run --</option>
-                  {completedRuns.map(r => (
-                    <option key={r.id} value={r.id}>Experiment #{r.experiment_id} (Run: {r.id.slice(0, 8)})</option>
-                  ))}
-                </select>
-              </div>
-              <button className="btn-primary" onClick={handleCompare} disabled={!runAId || !runBId}>Compare Runs</button>
-            </div>
+          {/* Comparison Tabs */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "15px", borderBottom: "1px solid #21262d", paddingBottom: "10px" }}>
+            <button 
+              type="button"
+              className={`nav-tab ${comparisonTab === "side-by-side" ? "active" : ""}`} 
+              onClick={() => setComparisonTab("side-by-side")}
+              style={{ padding: "8px 16px", fontSize: "13px", background: "none", border: "none", cursor: "pointer", color: comparisonTab === "side-by-side" ? "var(--emerald-bright)" : "var(--text-muted)" }}
+            >
+              Side-by-Side Inspector
+            </button>
+            <button 
+              type="button"
+              className={`nav-tab ${comparisonTab === "sweep-analyzer" ? "active" : ""}`} 
+              onClick={() => {
+                setComparisonTab("sweep-analyzer");
+                handleLoadSweepDetails();
+              }}
+              style={{ padding: "8px 16px", fontSize: "13px", background: "none", border: "none", cursor: "pointer", color: comparisonTab === "sweep-analyzer" ? "var(--emerald-bright)" : "var(--text-muted)" }}
+            >
+              Multi-Run Sweep Analyzer
+            </button>
           </div>
 
-          {runADetail && runBDetail && (
+          {comparisonTab === "side-by-side" ? (
+            /* ------------------ SIDE-BY-SIDE INSPECTOR ------------------ */
             <div>
-              {/* Aggregated Stats Comparison */}
               <div className="panel">
                 <div className="panel-header">
-                  <span className="panel-title">Comparative Metrics Overview</span>
+                  <span className="panel-title">Select Runs to Compare</span>
                 </div>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Metric</th>
-                      <th style={{ color: "var(--emerald-bright)" }}>Run A: {runADetail.model.name}</th>
-                      <th style={{ color: "#58a6ff" }}>Run B: {runBDetail.model.name}</th>
-                      <th>Difference</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Latency */}
-                    <tr>
-                      <td className="strong">Average Latency</td>
-                      <td>{runADetail.metrics_summary.avg_latency.toFixed(3)}s</td>
-                      <td>{runBDetail.metrics_summary.avg_latency.toFixed(3)}s</td>
-                      <td style={{ color: runADetail.metrics_summary.avg_latency > runBDetail.metrics_summary.avg_latency ? "var(--emerald-bright)" : "var(--danger-neon)" }}>
-                        {(runBDetail.metrics_summary.avg_latency - runADetail.metrics_summary.avg_latency).toFixed(3)}s
-                      </td>
-                    </tr>
-                    {/* Cost */}
-                    <tr>
-                      <td className="strong">Total Run Cost</td>
-                      <td>${runADetail.metrics_summary.total_cost.toFixed(4)}</td>
-                      <td>${runBDetail.metrics_summary.total_cost.toFixed(4)}</td>
-                      <td style={{ color: runADetail.metrics_summary.total_cost > runBDetail.metrics_summary.total_cost ? "var(--emerald-bright)" : "var(--danger-neon)" }}>
-                        ${(runBDetail.metrics_summary.total_cost - runADetail.metrics_summary.total_cost).toFixed(4)}
-                      </td>
-                    </tr>
-                    {/* Accuracy or Task Success */}
-                    {("accuracy" in runADetail.metrics_summary) && (
-                      <tr>
-                        <td className="strong">Average Accuracy</td>
-                        <td>{(runADetail.metrics_summary.accuracy * 100).toFixed(0)}%</td>
-                        <td>{(runBDetail.metrics_summary.accuracy * 100).toFixed(0)}%</td>
-                        <td style={{ color: runBDetail.metrics_summary.accuracy >= runADetail.metrics_summary.accuracy ? "var(--emerald-bright)" : "var(--danger-neon)" }}>
-                          {((runBDetail.metrics_summary.accuracy - runADetail.metrics_summary.accuracy) * 100).toFixed(0)}%
-                        </td>
-                      </tr>
-                    )}
-                    {/* RAG Faithfulness */}
-                    {("faithfulness" in runADetail.metrics_summary) && (
-                      <tr>
-                        <td className="strong">Context Faithfulness</td>
-                        <td>{(runADetail.metrics_summary.faithfulness * 100).toFixed(0)}%</td>
-                        <td>{(runBDetail.metrics_summary.faithfulness * 100).toFixed(0)}%</td>
-                        <td>{((runBDetail.metrics_summary.faithfulness - runADetail.metrics_summary.faithfulness) * 100).toFixed(0)}%</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                <div style={{ display: "flex", gap: "20px", alignItems: "flex-end" }}>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="form-label">Run A (Base Model)</label>
+                    <select className="form-select" value={runAId} onChange={(e) => setRunAId(e.target.value)}>
+                      <option value="">-- Choose Completed Run --</option>
+                      {completedRuns.map(r => (
+                        <option key={r.id} value={r.id}>Experiment #{r.experiment_id} (Run: {r.id.slice(0, 8)})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                    <label className="form-label">Run B (Comparison Model)</label>
+                    <select className="form-select" value={runBId} onChange={(e) => setRunBId(e.target.value)}>
+                      <option value="">-- Choose Completed Run --</option>
+                      {completedRuns.map(r => (
+                        <option key={r.id} value={r.id}>Experiment #{r.experiment_id} (Run: {r.id.slice(0, 8)})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button className="btn-primary" onClick={handleCompare} disabled={!runAId || !runBId}>Compare Runs</button>
+                </div>
               </div>
 
-              {/* Reproducibility Version Matrix */}
-              <div className="panel">
-                <div className="panel-header">
-                  <span className="panel-title">Reproducibility & Version Matrix</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>Experiment #{runADetail.experiment.id} vs. Experiment #{runBDetail.experiment.id}</span>
-                </div>
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Parameters & Versions</th>
-                      <th style={{ color: "var(--emerald-bright)" }}>Run A: {runADetail.model.name}</th>
-                      <th style={{ color: "#58a6ff" }}>Run B: {runBDetail.model.name}</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Git Commit */}
-                    <tr>
-                      <td className="strong">Git Commit Hash</td>
-                      <td style={{ fontFamily: "monospace", fontSize: "13px" }}>{runADetail.experiment.git_commit || "N/A"}</td>
-                      <td style={{ fontFamily: "monospace", fontSize: "13px" }}>{runBDetail.experiment.git_commit || "N/A"}</td>
-                      <td>
-                        {runADetail.experiment.git_commit === runBDetail.experiment.git_commit ? (
-                          <span style={{ color: "var(--emerald-bright)", fontSize: "12px" }}>✓ Identical Codebase</span>
-                        ) : (
-                          <span style={{ color: "var(--warning-neon)", fontSize: "12px" }}>⚠️ Codebase Delta</span>
+              {runADetail && runBDetail && (
+                <div>
+                  {/* Aggregated Stats Comparison */}
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">Comparative Metrics Overview</span>
+                    </div>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Metric</th>
+                          <th style={{ color: "var(--emerald-bright)" }}>Run A: {runADetail.model.name}</th>
+                          <th style={{ color: "#58a6ff" }}>Run B: {runBDetail.model.name}</th>
+                          <th>Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Latency */}
+                        <tr>
+                          <td className="strong">Average Latency</td>
+                          <td>{runADetail.metrics_summary.avg_latency.toFixed(3)}s</td>
+                          <td>{runBDetail.metrics_summary.avg_latency.toFixed(3)}s</td>
+                          <td style={{ color: runADetail.metrics_summary.avg_latency > runBDetail.metrics_summary.avg_latency ? "var(--emerald-bright)" : "var(--danger-neon)" }}>
+                            {(runBDetail.metrics_summary.avg_latency - runADetail.metrics_summary.avg_latency).toFixed(3)}s
+                          </td>
+                        </tr>
+                        {/* Cost */}
+                        <tr>
+                          <td className="strong">Total Run Cost</td>
+                          <td>${runADetail.metrics_summary.total_cost.toFixed(4)}</td>
+                          <td>${runBDetail.metrics_summary.total_cost.toFixed(4)}</td>
+                          <td style={{ color: runADetail.metrics_summary.total_cost > runBDetail.metrics_summary.total_cost ? "var(--emerald-bright)" : "var(--danger-neon)" }}>
+                            ${(runBDetail.metrics_summary.total_cost - runADetail.metrics_summary.total_cost).toFixed(4)}
+                          </td>
+                        </tr>
+                        {/* Accuracy or Task Success */}
+                        {("accuracy" in runADetail.metrics_summary) && (
+                          <tr>
+                            <td className="strong">Average Accuracy</td>
+                            <td>{(runADetail.metrics_summary.accuracy * 100).toFixed(0)}%</td>
+                            <td>{(runBDetail.metrics_summary.accuracy * 100).toFixed(0)}%</td>
+                            <td style={{ color: runBDetail.metrics_summary.accuracy >= runADetail.metrics_summary.accuracy ? "var(--emerald-bright)" : "var(--danger-neon)" }}>
+                              {((runBDetail.metrics_summary.accuracy - runADetail.metrics_summary.accuracy) * 100).toFixed(0)}%
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                    {/* Model Version */}
-                    <tr>
-                      <td className="strong">Model Config Version</td>
-                      <td>v{runADetail.experiment.model_version} ({runADetail.model.provider})</td>
-                      <td>v{runBDetail.experiment.model_version} ({runBDetail.model.provider})</td>
-                      <td>
-                        {runADetail.experiment.model_version === runBDetail.experiment.model_version ? "Identical" : "Delta"}
-                      </td>
-                    </tr>
-                    {/* Dataset Version */}
-                    <tr>
-                      <td className="strong">Dataset Config Version</td>
-                      <td>v{runADetail.experiment.dataset_version} ({runADetail.dataset.task})</td>
-                      <td>v{runBDetail.experiment.dataset_version} ({runBDetail.dataset.task})</td>
-                      <td>
-                        {runADetail.experiment.dataset_version === runBDetail.experiment.dataset_version ? "Identical" : "Delta"}
-                      </td>
-                    </tr>
-                    {/* Prompt Version */}
-                    <tr>
-                      <td className="strong">Prompt Template Version</td>
-                      <td>v{runADetail.experiment.prompt_version} ({runADetail.experiment.prompt_id})</td>
-                      <td>v{runBDetail.experiment.prompt_version} ({runBDetail.experiment.prompt_id})</td>
-                      <td>
-                        {runADetail.experiment.prompt_version === runBDetail.experiment.prompt_version ? "Identical" : "Delta"}
-                      </td>
-                    </tr>
-                    {/* Evaluation Version */}
-                    <tr>
-                      <td className="strong">Eval Engine Version</td>
-                      <td>v{runADetail.experiment.evaluation_version || "1.0.0"}</td>
-                      <td>v{runBDetail.experiment.evaluation_version || "1.0.0"}</td>
-                      <td>Identical</td>
-                    </tr>
-                    {/* Hyperparameters */}
-                    <tr>
-                      <td className="strong">Hyperparameters (Temp / Top-P)</td>
-                      <td>T={runADetail.experiment.temperature} • P={runADetail.experiment.top_p}</td>
-                      <td>T={runBDetail.experiment.temperature} • P={runBDetail.experiment.top_p}</td>
-                      <td>
-                        {runADetail.experiment.temperature === runBDetail.experiment.temperature && runADetail.experiment.top_p === runBDetail.experiment.top_p ? "Identical" : "Delta"}
-                      </td>
-                    </tr>
-                    {/* Random Seed */}
-                    <tr>
-                      <td className="strong">Random Seed</td>
-                      <td>Seed={runADetail.experiment.seed}</td>
-                      <td>Seed={runBDetail.experiment.seed}</td>
-                      <td>
-                        {runADetail.experiment.seed === runBDetail.experiment.seed ? "Identical" : "Delta"}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                        {/* RAG Faithfulness */}
+                        {("faithfulness" in runADetail.metrics_summary) && (
+                          <tr>
+                            <td className="strong">Context Faithfulness</td>
+                            <td>{(runADetail.metrics_summary.faithfulness * 100).toFixed(0)}%</td>
+                            <td>{(runBDetail.metrics_summary.faithfulness * 100).toFixed(0)}%</td>
+                            <td>{((runBDetail.metrics_summary.faithfulness - runADetail.metrics_summary.faithfulness) * 100).toFixed(0)}%</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Reproducibility Version Matrix */}
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">Reproducibility & Version Matrix</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>Experiment #{runADetail.experiment.id} vs. Experiment #{runBDetail.experiment.id}</span>
+                    </div>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Parameters & Versions</th>
+                          <th style={{ color: "var(--emerald-bright)" }}>Run A: {runADetail.model.name}</th>
+                          <th style={{ color: "#58a6ff" }}>Run B: {runBDetail.model.name}</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Git Commit */}
+                        <tr>
+                          <td className="strong">Git Commit Hash</td>
+                          <td style={{ fontFamily: "monospace", fontSize: "13px" }}>{runADetail.experiment.git_commit || "N/A"}</td>
+                          <td style={{ fontFamily: "monospace", fontSize: "13px" }}>{runBDetail.experiment.git_commit || "N/A"}</td>
+                          <td>
+                            {runADetail.experiment.git_commit === runBDetail.experiment.git_commit ? (
+                              <span style={{ color: "var(--emerald-bright)", fontSize: "12px" }}>✓ Identical Codebase</span>
+                            ) : (
+                              <span style={{ color: "var(--warning-neon)", fontSize: "12px" }}>⚠️ Codebase Delta</span>
+                            )}
+                          </td>
+                        </tr>
+                        {/* Model Version */}
+                        <tr>
+                          <td className="strong">Model Config Version</td>
+                          <td>v{runADetail.experiment.model_version} ({runADetail.model.provider})</td>
+                          <td>v{runBDetail.experiment.model_version} ({runBDetail.model.provider})</td>
+                          <td>
+                            {runADetail.experiment.model_version === runBDetail.experiment.model_version ? "Identical" : "Delta"}
+                          </td>
+                        </tr>
+                        {/* Dataset Version */}
+                        <tr>
+                          <td className="strong">Dataset Config Version</td>
+                          <td>v{runADetail.experiment.dataset_version} ({runADetail.dataset.task})</td>
+                          <td>v{runBDetail.experiment.dataset_version} ({runBDetail.dataset.task})</td>
+                          <td>
+                            {runADetail.experiment.dataset_version === runBDetail.experiment.dataset_version ? "Identical" : "Delta"}
+                          </td>
+                        </tr>
+                        {/* Prompt Version */}
+                        <tr>
+                          <td className="strong">Prompt Template Version</td>
+                          <td>v{runADetail.experiment.prompt_version} ({runADetail.experiment.prompt_id})</td>
+                          <td>v{runBDetail.experiment.prompt_version} ({runBDetail.experiment.prompt_id})</td>
+                          <td>
+                            {runADetail.experiment.prompt_version === runBDetail.experiment.prompt_version ? "Identical" : "Delta"}
+                          </td>
+                        </tr>
+                        {/* Evaluation Version */}
+                        <tr>
+                          <td className="strong">Eval Engine Version</td>
+                          <td>v{runADetail.experiment.evaluation_version || "1.0.0"}</td>
+                          <td>v{runBDetail.experiment.evaluation_version || "1.0.0"}</td>
+                          <td>Identical</td>
+                        </tr>
+                        {/* Hyperparameters */}
+                        <tr>
+                          <td className="strong">Hyperparameters (Temp / Top-P)</td>
+                          <td>T={runADetail.experiment.temperature} • P={runADetail.experiment.top_p}</td>
+                          <td>T={runBDetail.experiment.temperature} • P={runBDetail.experiment.top_p}</td>
+                          <td>
+                            {runADetail.experiment.temperature === runBDetail.experiment.temperature && runADetail.experiment.top_p === runBDetail.experiment.top_p ? "Identical" : "Delta"}
+                          </td>
+                        </tr>
+                        {/* Random Seed */}
+                        <tr>
+                          <td className="strong">Random Seed</td>
+                          <td>Seed={runADetail.experiment.seed}</td>
+                          <td>Seed={runBDetail.experiment.seed}</td>
+                          <td>
+                            {runADetail.experiment.seed === runBDetail.experiment.seed ? "Identical" : "Delta"}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Sample-by-Sample Diff Inspector */}
+                  <div className="split-layout">
+                    {/* Sidebar index */}
+                    <div className="split-sidebar">
+                      <span className="form-label">Evaluation Prompts ({runADetail.logs.length})</span>
+                      {runADetail.logs.map((log, idx) => (
+                        <div 
+                          key={log.id} 
+                          className={`sidebar-item ${selectedLogIndex === idx ? "active" : ""}`}
+                          onClick={() => setSelectedLogIndex(idx)}
+                        >
+                          <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px" }}>Sample #{idx + 1}</div>
+                          <div style={{ fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {log.input_text}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Display comparisons */}
+                    <div className="panel" style={{ marginBottom: 0 }}>
+                      <div className="panel-header">
+                        <span className="panel-title">Response Comparison</span>
+                      </div>
+                      
+                      <div style={{ marginBottom: "16px" }}>
+                        <span className="form-label">Prompt Question</span>
+                        <p style={{ padding: "10px", backgroundColor: "var(--bg-dark)", border: "1px solid #21262d", borderRadius: "6px", fontSize: "13px" }}>
+                          {runADetail.logs[selectedLogIndex].input_text}
+                        </p>
+                      </div>
+
+                      <div style={{ marginBottom: "16px" }}>
+                        <span className="form-label">Expected Output (Ground Truth)</span>
+                        <p style={{ padding: "10px", backgroundColor: "var(--bg-dark)", border: "1px solid #21262d", borderRadius: "6px", fontSize: "13px", color: "var(--emerald-bright)" }}>
+                          {runADetail.logs[selectedLogIndex].expected_output || "No ground truth provided"}
+                        </p>
+                      </div>
+
+                      <div className="compare-container">
+                        {/* Run A completion */}
+                        <div style={{ border: "1px solid var(--border-dim)", borderRadius: "8px", padding: "14px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                            <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--emerald-bright)" }}>Run A: {runADetail.model.name}</span>
+                            <span className={`badge badge-${runADetail.logs[selectedLogIndex].is_failure ? "failed" : "completed"}`}>
+                              {runADetail.logs[selectedLogIndex].is_failure ? "Incorrect" : "Correct"}
+                            </span>
+                          </div>
+                          <pre style={{ backgroundColor: "var(--bg-dark)", padding: "10px", borderRadius: "6px", fontSize: "12px", whiteSpace: "pre-wrap", border: "1px solid #21262d", minHeight: "100px", fontFamily: "monospace" }}>
+                            {runADetail.logs[selectedLogIndex].generated_output}
+                          </pre>
+                          <div style={{ display: "flex", gap: "10px", marginTop: "10px", fontSize: "11px", color: "var(--text-muted)" }}>
+                            <span>Latency: {runADetail.logs[selectedLogIndex].latency.toFixed(2)}s</span>
+                            <span>Cost: ${runADetail.logs[selectedLogIndex].cost.toFixed(4)}</span>
+                          </div>
+                        </div>
+
+                        {/* Run B completion */}
+                        <div style={{ border: "1px solid var(--border-dim)", borderRadius: "8px", padding: "14px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                            <span style={{ fontSize: "13px", fontWeight: "600", color: "#58a6ff" }}>Run B: {runBDetail.model.name}</span>
+                            <span className={`badge badge-${runBDetail.logs[selectedLogIndex].is_failure ? "failed" : "completed"}`}>
+                              {runBDetail.logs[selectedLogIndex].is_failure ? "Incorrect" : "Correct"}
+                            </span>
+                          </div>
+                          <pre style={{ backgroundColor: "var(--bg-dark)", padding: "10px", borderRadius: "6px", fontSize: "12px", whiteSpace: "pre-wrap", border: "1px solid #21262d", minHeight: "100px", fontFamily: "monospace" }}>
+                            {runBDetail.logs[selectedLogIndex].generated_output}
+                          </pre>
+                          <div style={{ display: "flex", gap: "10px", marginTop: "10px", fontSize: "11px", color: "var(--text-muted)" }}>
+                            <span>Latency: {runBDetail.logs[selectedLogIndex].latency.toFixed(2)}s</span>
+                            <span>Cost: ${runBDetail.logs[selectedLogIndex].cost.toFixed(4)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ------------------ SWEEP ANALYZER WORKSPACE ------------------ */
+            <div>
+              <div className="panel">
+                <div className="panel-header">
+                  <span className="panel-title">Select Runs to Plot Trend Curves</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>Select 3 or more runs to visualize hyperparameter sweeps</span>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", margin: "10px 0" }}>
+                  {completedRuns.map(r => {
+                    const isChecked = selectedSweepRunIds.includes(r.id);
+                    return (
+                      <label 
+                        key={r.id} 
+                        style={{ 
+                          display: "flex", 
+                          alignItems: "center", 
+                          gap: "8px", 
+                          padding: "8px 14px", 
+                          border: isChecked ? "1px solid var(--emerald-bright)" : "1px solid #21262d", 
+                          borderRadius: "6px", 
+                          backgroundColor: isChecked ? "rgba(16, 185, 129, 0.1)" : "var(--bg-dark)", 
+                          cursor: "pointer", 
+                          fontSize: "12px",
+                          userSelect: "none" 
+                        }}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={isChecked} 
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSweepRunIds(prev => [...prev, r.id]);
+                            } else {
+                              setSelectedSweepRunIds(prev => prev.filter(id => id !== r.id));
+                            }
+                          }}
+                          style={{ accentColor: "var(--emerald-bright)", cursor: "pointer" }}
+                        />
+                        <span>Experiment #{r.experiment_id} ({r.model_name}) [Run: {r.id.slice(0, 8)}]</span>
+                      </label>
+                    );
+                  })}
+                  {completedRuns.length === 0 && (
+                    <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>No completed runs registered yet.</p>
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "15px" }}>
+                  <button 
+                    type="button"
+                    className="btn-secondary" 
+                    onClick={() => {
+                      if (completedRuns.length > 0) {
+                        setSelectedSweepRunIds(completedRuns.map(r => r.id));
+                      }
+                    }}
+                    style={{ padding: "6px 12px", fontSize: "12px" }}
+                  >
+                    Select All Runs
+                  </button>
+                  <button 
+                    type="button"
+                    className="btn-secondary" 
+                    onClick={() => setSelectedSweepRunIds([])}
+                    style={{ padding: "6px 12px", fontSize: "12px" }}
+                  >
+                    Clear Selections
+                  </button>
+                </div>
               </div>
 
-              {/* Sample-by-Sample Diff Inspector */}
-              <div className="split-layout">
-                {/* Sidebar index */}
-                <div className="split-sidebar">
-                  <span className="form-label">Evaluation Prompts ({runADetail.logs.length})</span>
-                  {runADetail.logs.map((log, idx) => (
-                    <div 
-                      key={log.id} 
-                      className={`sidebar-item ${selectedLogIndex === idx ? "active" : ""}`}
-                      onClick={() => setSelectedLogIndex(idx)}
-                    >
-                      <div style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "4px" }}>Sample #{idx + 1}</div>
-                      <div style={{ fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {log.input_text}
-                      </div>
+              {sweepRunsDetails.length > 0 ? (
+                <div>
+                  <div className="panel">
+                    <div className="panel-header">
+                      <span className="panel-title">Multi-Run Sweep Metrics Grid</span>
+                      <span style={{ color: "var(--text-muted)", fontSize: "12px" }}>Ordered by Temperature</span>
                     </div>
-                  ))}
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Experiment</th>
+                          <th>Model Node</th>
+                          <th>Temperature</th>
+                          <th>Accuracy / Success</th>
+                          <th>Avg Latency</th>
+                          <th>Total Cost</th>
+                          <th>Git Commit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sweepRunsDetails.map(d => {
+                          const accVal = d.metrics_summary.accuracy !== undefined 
+                            ? d.metrics_summary.accuracy 
+                            : d.metrics_summary.faithfulness !== undefined
+                            ? d.metrics_summary.faithfulness
+                            : null;
+                          return (
+                            <tr key={d.id}>
+                              <td className="strong">Experiment #{d.experiment.id}</td>
+                              <td>{d.model.name}</td>
+                              <td style={{ color: "var(--emerald-bright)", fontWeight: "600" }}>{d.experiment.temperature.toFixed(2)}</td>
+                              <td className="strong">{accVal !== null ? `${(accVal * 100).toFixed(0)}%` : "N/A"}</td>
+                              <td>{d.metrics_summary.avg_latency.toFixed(2)}s</td>
+                              <td>${d.metrics_summary.total_cost.toFixed(4)}</td>
+                              <td style={{ fontFamily: "monospace", fontSize: "12px" }}>{d.experiment.git_commit || "N/A"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Render curves */}
+                  <SweepLineChart data={sweepRunsDetails} />
                 </div>
-                
-                {/* Display comparisons */}
-                <div className="panel" style={{ marginBottom: 0 }}>
-                  <div className="panel-header">
-                    <span className="panel-title">Response Comparison</span>
-                  </div>
-                  
-                  <div style={{ marginBottom: "16px" }}>
-                    <span className="form-label">Prompt Question</span>
-                    <p style={{ padding: "10px", backgroundColor: "var(--bg-dark)", border: "1px solid #21262d", borderRadius: "6px", fontSize: "13px" }}>
-                      {runADetail.logs[selectedLogIndex].input_text}
-                    </p>
-                  </div>
-
-                  <div style={{ marginBottom: "16px" }}>
-                    <span className="form-label">Expected Output (Ground Truth)</span>
-                    <p style={{ padding: "10px", backgroundColor: "var(--bg-dark)", border: "1px solid #21262d", borderRadius: "6px", fontSize: "13px", color: "var(--emerald-bright)" }}>
-                      {runADetail.logs[selectedLogIndex].expected_output || "No ground truth provided"}
-                    </p>
-                  </div>
-
-                  <div className="compare-container">
-                    {/* Run A completion */}
-                    <div style={{ border: "1px solid var(--border-dim)", borderRadius: "8px", padding: "14px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: "600", color: "var(--emerald-bright)" }}>Run A: {runADetail.model.name}</span>
-                        <span className={`badge badge-${runADetail.logs[selectedLogIndex].is_failure ? "failed" : "completed"}`}>
-                          {runADetail.logs[selectedLogIndex].is_failure ? "Incorrect" : "Correct"}
-                        </span>
-                      </div>
-                      <pre style={{ backgroundColor: "var(--bg-dark)", padding: "10px", borderRadius: "6px", fontSize: "12px", whiteSpace: "pre-wrap", border: "1px solid #21262d", minHeight: "100px", fontFamily: "monospace" }}>
-                        {runADetail.logs[selectedLogIndex].generated_output}
-                      </pre>
-                      <div style={{ display: "flex", gap: "10px", marginTop: "10px", fontSize: "11px", color: "var(--text-muted)" }}>
-                        <span>Latency: {runADetail.logs[selectedLogIndex].latency.toFixed(2)}s</span>
-                        <span>Cost: ${runADetail.logs[selectedLogIndex].cost.toFixed(4)}</span>
-                      </div>
-                    </div>
-
-                    {/* Run B completion */}
-                    <div style={{ border: "1px solid var(--border-dim)", borderRadius: "8px", padding: "14px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                        <span style={{ fontSize: "13px", fontWeight: "600", color: "#58a6ff" }}>Run B: {runBDetail.model.name}</span>
-                        <span className={`badge badge-${runBDetail.logs[selectedLogIndex].is_failure ? "failed" : "completed"}`}>
-                          {runBDetail.logs[selectedLogIndex].is_failure ? "Incorrect" : "Correct"}
-                        </span>
-                      </div>
-                      <pre style={{ backgroundColor: "var(--bg-dark)", padding: "10px", borderRadius: "6px", fontSize: "12px", whiteSpace: "pre-wrap", border: "1px solid #21262d", minHeight: "100px", fontFamily: "monospace" }}>
-                        {runBDetail.logs[selectedLogIndex].generated_output}
-                      </pre>
-                      <div style={{ display: "flex", gap: "10px", marginTop: "10px", fontSize: "11px", color: "var(--text-muted)" }}>
-                        <span>Latency: {runBDetail.logs[selectedLogIndex].latency.toFixed(2)}s</span>
-                        <span>Cost: ${runBDetail.logs[selectedLogIndex].cost.toFixed(4)}</span>
-                      </div>
-                    </div>
-                  </div>
+              ) : (
+                <div className="panel" style={{ padding: "30px", textAlign: "center", color: "var(--text-muted)" }}>
+                  Select multiple evaluation runs above to plot and analyze their hyperparameter sweep curves.
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>
@@ -424,7 +864,40 @@ export default function Experiments() {
               </select>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            {/* Form Mode Selector */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid #21262d", paddingBottom: "10px" }}>
+              <button 
+                type="button" 
+                className={`nav-tab ${formMode === "single" ? "active" : ""}`} 
+                onClick={() => setFormMode("single")}
+                style={{ padding: "6px 12px", fontSize: "12px", border: "none", background: "none", cursor: "pointer", color: formMode === "single" ? "var(--emerald-bright)" : "var(--text-muted)" }}
+              >
+                Single Evaluation
+              </button>
+              <button 
+                type="button" 
+                className={`nav-tab ${formMode === "sweep" ? "active" : ""}`} 
+                onClick={() => setFormMode("sweep")}
+                style={{ padding: "6px 12px", fontSize: "12px", border: "none", background: "none", cursor: "pointer", color: formMode === "sweep" ? "var(--emerald-bright)" : "var(--text-muted)" }}
+              >
+                1D Temp Sweep (5 Runs)
+              </button>
+              <button 
+                type="button" 
+                className={`nav-tab ${formMode === "grid" ? "active" : ""}`} 
+                onClick={() => {
+                  setFormMode("grid");
+                  if (gridPromptIds.length === 0 && prompts.length > 0) {
+                    setGridPromptIds([prompts[0].id]);
+                  }
+                }}
+                style={{ padding: "6px 12px", fontSize: "12px", border: "none", background: "none", cursor: "pointer", color: formMode === "grid" ? "var(--emerald-bright)" : "var(--text-muted)" }}
+              >
+                Grid Parameter Sweep
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
               <div className="form-group">
                 <label className="form-label">Select Evaluation Dataset</label>
                 <select className="form-select" value={datasetId} onChange={(e) => setDatasetId(e.target.value)}>
@@ -434,38 +907,152 @@ export default function Experiments() {
                 </select>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Select Prompt Strategy</label>
-                <select className="form-select" value={promptId} onChange={(e) => setPromptId(e.target.value)}>
-                  {prompts.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (v{p.version})</option>
-                  ))}
-                </select>
-              </div>
+              {formMode !== "grid" ? (
+                <div className="form-group">
+                  <label className="form-label">Select Prompt Strategy</label>
+                  <select className="form-select" value={promptId} onChange={(e) => setPromptId(e.target.value)}>
+                    {prompts.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} (v{p.version})</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label className="form-label">Select Prompt Strategies (Multi-Select)</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "100px", overflowY: "auto", border: "1px solid #21262d", padding: "8px", borderRadius: "6px", backgroundColor: "var(--bg-dark)" }}>
+                    {prompts.map(p => {
+                      const isChecked = gridPromptIds.includes(p.id);
+                      return (
+                        <label key={p.id} style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "12px", color: "var(--text)" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setGridPromptIds(prev => [...prev, p.id]);
+                              } else {
+                                setGridPromptIds(prev => prev.filter(id => id !== p.id));
+                              }
+                            }}
+                            style={{ accentColor: "var(--emerald-bright)" }}
+                          />
+                          <span>{p.name} (v{p.version})</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "16px" }}>
-              <div className="form-group">
-                <label className="form-label">Temperature</label>
-                <input 
-                  type="number" 
-                  step="0.05" 
-                  className="form-input" 
-                  value={temp}
-                  onChange={(e) => setTemp(e.target.value)}
-                />
+            {formMode === "grid" && (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                {/* Temperatures checklist */}
+                <div className="form-group">
+                  <label className="form-label">Temperatures Sweep Grid</label>
+                  <div style={{ display: "flex", gap: "14px", border: "1px solid #21262d", padding: "8px", borderRadius: "6px", backgroundColor: "var(--bg-dark)" }}>
+                    {[0.2, 0.5, 0.8].map(t => {
+                      const isChecked = gridTemps.includes(t);
+                      return (
+                        <label key={t} style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", fontSize: "12px" }}>
+                          <input 
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setGridTemps(prev => [...prev, t].sort());
+                              } else {
+                                setGridTemps(prev => prev.filter(val => val !== t));
+                              }
+                            }}
+                            style={{ accentColor: "var(--emerald-bright)" }}
+                          />
+                          <span>{t}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Top Ps checklist */}
+                <div className="form-group">
+                  <label className="form-label">Top P Sweep Grid</label>
+                  <div style={{ display: "flex", gap: "14px", border: "1px solid #21262d", padding: "8px", borderRadius: "6px", backgroundColor: "var(--bg-dark)" }}>
+                    {[0.9, 0.95].map(p => {
+                      const isChecked = gridTopPs.includes(p);
+                      return (
+                        <label key={p} style={{ display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", fontSize: "12px" }}>
+                          <input 
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setGridTopPs(prev => [...prev, p].sort());
+                              } else {
+                                setGridTopPs(prev => prev.filter(val => val !== p));
+                              }
+                            }}
+                            style={{ accentColor: "var(--emerald-bright)" }}
+                          />
+                          <span>{p}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Top P</label>
-                <input 
-                  type="number" 
-                  step="0.05" 
-                  className="form-input" 
-                  value={topP}
-                  onChange={(e) => setTopP(e.target.value)}
-                />
+            )}
+
+            {/* Live estimated counter banner */}
+            {formMode === "grid" && (
+              <div style={{ backgroundColor: "rgba(88, 166, 255, 0.1)", border: "1px solid rgba(88, 166, 255, 0.2)", padding: "10px 14px", borderRadius: "6px", marginBottom: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "12px", color: "#58a6ff" }}>
+                  <strong>Orchestration Estimate:</strong> Combines {gridPromptIds.length} Prompts × {gridTemps.length} Temperatures × {gridTopPs.length} Top-Ps
+                </span>
+                <span style={{ fontSize: "13px", fontWeight: "bold", color: "#58a6ff", backgroundColor: "rgba(88, 166, 255, 0.2)", padding: "4px 8px", borderRadius: "4px" }}>
+                  {gridPromptIds.length * gridTemps.length * gridTopPs.length} Runs enqueued
+                </span>
               </div>
-              <div className="form-group">
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+              {formMode !== "grid" && (
+                <div className="form-group">
+                  <label className="form-label">Temperature</label>
+                  {formMode === "sweep" ? (
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      value="[0.2, 0.4, 0.6, 0.8, 1.0]"
+                      disabled
+                      style={{ backgroundColor: "var(--bg-dark)", color: "var(--text-muted)", cursor: "not-allowed" }}
+                    />
+                  ) : (
+                    <input 
+                      type="number" 
+                      step="0.05" 
+                      className="form-input" 
+                      value={temp}
+                      onChange={(e) => setTemp(e.target.value)}
+                    />
+                  )}
+                </div>
+              )}
+              
+              {formMode !== "grid" && (
+                <div className="form-group">
+                  <label className="form-label">Top P</label>
+                  <input 
+                    type="number" 
+                    step="0.05" 
+                    className="form-input" 
+                    value={topP}
+                    onChange={(e) => setTopP(e.target.value)}
+                  />
+                </div>
+              )}
+
+              <div className="form-group" style={{ gridColumn: formMode === "grid" ? "span 2" : "span 1" }}>
                 <label className="form-label">Max Tokens</label>
                 <input 
                   type="number" 
@@ -474,7 +1061,8 @@ export default function Experiments() {
                   onChange={(e) => setMaxTokens(e.target.value)}
                 />
               </div>
-              <div className="form-group">
+
+              <div className="form-group" style={{ gridColumn: formMode === "grid" ? "span 2" : "span 1" }}>
                 <label className="form-label">Seed</label>
                 <input 
                   type="number" 

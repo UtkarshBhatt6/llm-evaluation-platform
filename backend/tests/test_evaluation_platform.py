@@ -237,3 +237,82 @@ def test_experiment_sequential_tracking():
     assert exp1.prompt_version == "3.0"
     assert exp1.evaluation_version == "1.0.0"
     assert exp1.git_commit is not None
+
+
+def test_experiment_sweep_creation(db_session):
+    from backend.main import create_experiment_sweep
+    from backend.schemas import ExperimentSweepCreate
+
+    # Seed required entities first
+    d = Dataset(id="dataset_sweep", name="Sweep DS", task="math", version="1.0")
+    m = Model(id="model_sweep", name="Sweep Model", provider="openai", version="1.0")
+    p = Prompt(id="prompt_sweep", name="Sweep Prompt", content="test", task="math", version="1.0")
+    db_session.add_all([d, m, p])
+    db_session.commit()
+
+    sweep_payload = ExperimentSweepCreate(
+        name="Sweep Test Run",
+        model_id="model_sweep",
+        dataset_id="dataset_sweep",
+        prompt_id="prompt_sweep",
+        temperatures=[0.2, 0.5, 0.8],
+        top_p=0.9,
+        max_tokens=100,
+        seed=10
+    )
+
+    # Call the controller directly passing our db_session
+    runs = create_experiment_sweep(sweep_payload, db=db_session)
+    assert len(runs) == 3
+
+    # Check that 3 experiments were created with sequential IDs
+    experiments = db_session.query(Experiment).all()
+    assert len(experiments) == 3
+    assert experiments[0].temperature == 0.2
+    assert experiments[1].temperature == 0.5
+    assert experiments[2].temperature == 0.8
+    assert "T=0.2" in experiments[0].name
+
+    # Check that 3 jobs are enqueued in the Job database
+    jobs = db_session.query(Job).all()
+    assert len(jobs) == 3
+    assert jobs[0].type == "run_evaluation"
+
+
+def test_grid_sweep_orchestration(db_session):
+    from backend.main import create_experiment_grid_sweep
+    from backend.schemas import ExperimentGridSweepCreate
+
+    # Seed required entities first
+    d = Dataset(id="dataset_grid", name="Grid DS", task="math", version="1.0")
+    m = Model(id="model_grid", name="Grid Model", provider="openai", version="1.0")
+    p1 = Prompt(id="cot", name="CoT Prompt", content="test", task="math", version="1.0")
+    p2 = Prompt(id="zero-shot", name="Zero-Shot Prompt", content="test", task="math", version="2.0")
+    db_session.add_all([d, m, p1, p2])
+    db_session.commit()
+
+    grid_payload = ExperimentGridSweepCreate(
+        name="Grid Test Run",
+        model_id="model_grid",
+        dataset_id="dataset_grid",
+        prompt_ids=["cot", "zero-shot"],
+        temperatures=[0.2, 0.5, 0.8],
+        top_ps=[0.9, 0.95],
+        max_tokens=100,
+        seed=10
+    )
+
+    # Call the controller directly passing our db_session
+    # 2 prompts x 3 temperatures x 2 top_ps = 12 total runs
+    runs = create_experiment_grid_sweep(grid_payload, db=db_session)
+    assert len(runs) == 12
+
+    # Check that 12 experiments were created in the database
+    experiments = db_session.query(Experiment).all()
+    assert len(experiments) == 12
+
+    # Check that 12 jobs are enqueued in the Job database
+    jobs = db_session.query(Job).all()
+    assert len(jobs) == 12
+    assert all(j.type == "run_evaluation" for j in jobs)
+

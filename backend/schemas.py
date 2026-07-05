@@ -60,6 +60,26 @@ class ExperimentCreate(BaseModel):
     max_tokens: int = 512
     seed: int = 42
 
+class ExperimentSweepCreate(BaseModel):
+    name: str
+    model_id: str
+    dataset_id: str
+    prompt_id: str
+    temperatures: List[float] = [0.2, 0.4, 0.6, 0.8, 1.0]
+    top_p: float = 0.95
+    max_tokens: int = 512
+    seed: int = 42
+
+class ExperimentGridSweepCreate(BaseModel):
+    name: str
+    model_id: str
+    dataset_id: str
+    prompt_ids: List[str]
+    temperatures: List[float] = [0.2, 0.5, 0.8]
+    top_ps: List[float] = [0.9, 0.95]
+    max_tokens: int = 512
+    seed: int = 42
+
 class ExperimentResponse(BaseModel):
     id: int
     name: str
