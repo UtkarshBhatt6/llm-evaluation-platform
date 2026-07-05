@@ -80,8 +80,11 @@ def run_evaluation_handler(payload: dict, heartbeat_fn: Any):
 
         logger.info(f"Starting evaluation run {run_id} [Model: {model.id}, Dataset: {dataset.id}]")
 
-        # Load samples based on dataset task
-        samples = get_dataset_samples(dataset.task)
+        # Load samples: first check if the dataset has custom samples stored, otherwise fallback to defaults based on task
+        if dataset.samples:
+            samples = dataset.samples
+        else:
+            samples = get_dataset_samples(dataset.task)
         total_samples = len(samples)
 
         # Initialize model inference adapter
@@ -532,6 +535,7 @@ def create_dataset(dataset: DatasetBase, db: Session = Depends(get_db)):
         num_samples=dataset.num_samples,
         avg_tokens=dataset.avg_tokens,
         splits=dataset.splits,
+        samples=dataset.samples,
         metadata_info=dataset.metadata_info,
         created_at=now
     )

@@ -13,6 +13,7 @@ class Dataset(Base):
     num_samples = Column(Integer, default=0)
     avg_tokens = Column(Integer, default=0)
     splits = Column(JSON, nullable=True)   # list of split names e.g. ["train", "test"]
+    samples = Column(JSON, nullable=True)  # custom test samples list
     metadata_info = Column(JSON, nullable=True)  # mapping of arbitrary metadata
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 

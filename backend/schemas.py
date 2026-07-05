@@ -11,6 +11,7 @@ class DatasetBase(BaseModel):
     num_samples: int = 0
     avg_tokens: int = 0
     splits: Optional[List[str]] = []
+    samples: Optional[List[Dict[str, Any]]] = None
     metadata_info: Optional[Dict[str, Any]] = None
 
 class DatasetResponse(DatasetBase):

@@ -1,0 +1,136 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Evaluation Report - Run run_custom_samples_123</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    background-color: #111827;
+                    color: #e5e7eb;
+                    margin: 0;
+                    padding: 40px;
+                }
+                .container {
+                    max-width: 900px;
+                    margin: 0 auto;
+                    background-color: #1f2937;
+                    padding: 30px;
+                    border-radius: 12px;
+                    border: 1px solid #10b981;
+                    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+                }
+                h1 {
+                    color: #10b981;
+                    border-bottom: 2px solid #374151;
+                    padding-bottom: 10px;
+                    margin-top: 0;
+                }
+                h2 {
+                    color: #34d399;
+                    margin-top: 30px;
+                    border-bottom: 1px solid #4b5563;
+                    padding-bottom: 5px;
+                }
+                .meta-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 15px;
+                    background: #111827;
+                    padding: 15px;
+                    border-radius: 6px;
+                    margin-bottom: 20px;
+                }
+                .meta-item {
+                    font-size: 14px;
+                }
+                .meta-item strong {
+                    color: #10b981;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 15px;
+                }
+                th, td {
+                    padding: 10px;
+                    text-align: left;
+                    border-bottom: 1px solid #374151;
+                }
+                th {
+                    background-color: #111827;
+                    color: #34d399;
+                }
+                li {
+                    margin-bottom: 10px;
+                    line-height: 1.5;
+                }
+                .footer {
+                    margin-top: 40px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Evaluation Report</h1>
+                <p>Run ID: <strong>run_custom_samples_123</strong></p>
+                <div class="meta-grid">
+                    <div class="meta-item"><strong>Date Compiled:</strong> 2026-07-05 10:16:56 UTC</div>
+                    <div class="meta-item"><strong>Run Status:</strong> completed</div>
+                    <div class="meta-item"><strong>Model Name:</strong> Custom Model (mock)</div>
+                    <div class="meta-item"><strong>Dataset:</strong> Custom DS (Math)</div>
+                </div>
+
+                <h2>Configuration Parameters</h2>
+                <div class="meta-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+                    <div class="meta-item"><strong>Temperature:</strong> 0.7</div>
+                    <div class="meta-item"><strong>Top P:</strong> 0.9</div>
+                    <div class="meta-item"><strong>Max Tokens:</strong> 100</div>
+                    <div class="meta-item"><strong>Seed:</strong> 42</div>
+                </div>
+
+                <h2>Summary Metrics</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Total Samples</td><td>2</td></tr><tr><td>Avg Latency</td><td>0.3469</td></tr><tr><td>Total Cost</td><td>0.0002</td></tr><tr><td>Accuracy</td><td>0.0000</td></tr><tr><td>Bleu</td><td>0.0000</td></tr><tr><td>Rouge L</td><td>0.0000</td></tr><tr><td>Judge Score</td><td>5.0000</td></tr>
+                    </tbody>
+                </table>
+
+                <div style="text-align: center; margin: 20px 0;"><img src="data:image/png;base64,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" alt="Metrics Plot" style="border-radius: 8px; border: 1px solid #374151; max-width: 100%;"></div>
+
+                <h2>Failures by Category</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Count</th>
+                            <th>Example Sample</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Math Error</td><td>2</td><td>Custom Math query 1?...</td></tr>
+                    </tbody>
+                </table>
+
+                <h2>Conclusions & Recommendations</h2>
+                <ul>
+                    <li><strong>Implement Few-Shot Prompting:</strong> Baseline task success is low. Consider transitioning from zero-shot to a 3-shot or 5-shot CoT template to prime correct output formatting.</li>
+                </ul>
+
+                <div class="footer">
+                    Generated automatically by Generic ML Experimentation and Evaluation Platform.
+                </div>
+            </div>
+        </body>
+        </html>
+        

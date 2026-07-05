@@ -11,8 +11,9 @@ export default function Datasets() {
   const [version, setVersion] = useState("1.0");
   const [task, setTask] = useState("QA");
   const [license, setLicense] = useState("MIT");
-  const [numSamples, setNumSamples] = useState(10);
+  const [numSamples, setNumSamples] = useState(5);
   const [avgTokens, setAvgTokens] = useState(120);
+  const [csvText, setCsvText] = useState("");
 
   const fetchDatasets = async () => {
     try {
@@ -29,9 +30,61 @@ export default function Datasets() {
     fetchDatasets();
   }, []);
 
+  const parseCSV = (text) => {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) return [];
+
+    const parseLine = (line) => {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (char === '"' || char === "'") {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          result.push(current.trim().replace(/^["']|["']$/g, ''));
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim().replace(/^["']|["']$/g, ''));
+      return result;
+    };
+
+    const headers = parseLine(lines[0]);
+    const parsed = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseLine(lines[i]);
+      if (cols.length === headers.length) {
+        const row = {};
+        headers.forEach((h, idx) => {
+          row[h] = cols[idx];
+        });
+        parsed.push(row);
+      }
+    }
+    return parsed;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!id || !name) return;
+
+    let customSamples = null;
+    let finalNumSamples = parseInt(numSamples);
+
+    if (csvText.trim()) {
+      const parsed = parseCSV(csvText);
+      if (parsed.length === 0) {
+        alert("Failed to parse CSV samples. Ensure you provide headers (question, ground_truth, context) on the first line.");
+        return;
+      }
+      customSamples = parsed;
+      finalNumSamples = parsed.length;
+    }
     
     const payload = {
       id,
@@ -39,9 +92,10 @@ export default function Datasets() {
       version,
       task,
       license,
-      num_samples: parseInt(numSamples),
+      num_samples: finalNumSamples,
       avg_tokens: parseInt(avgTokens),
       splits: ["test"],
+      samples: customSamples,
       metadata_info: { registered_by: "UI Client" }
     };
 
@@ -57,6 +111,7 @@ export default function Datasets() {
         // Reset form
         setId("");
         setName("");
+        setCsvText("");
       } else {
         const errData = await res.json();
         alert(`Error: ${errData.detail}`);
@@ -158,6 +213,20 @@ export default function Datasets() {
                 value={license}
                 onChange={(e) => setLicense(e.target.value)}
               />
+            </div>
+            <div className="form-group" style={{ marginBottom: "16px" }}>
+              <label className="form-label">Upload or Paste CSV samples (Optional)</label>
+              <textarea 
+                className="form-input" 
+                rows="4" 
+                placeholder="question,ground_truth,context&#10;&quot;What is 2+2?&quot;,&quot;4&quot;,&quot;&quot;&#10;&quot;What color is Mars?&quot;,&quot;red&quot;,&quot;&quot;"
+                value={csvText}
+                onChange={(e) => setCsvText(e.target.value)}
+                style={{ fontFamily: "monospace", fontSize: "11px", backgroundColor: "var(--bg-dark)", color: "var(--text)", border: "1px solid #21262d", borderRadius: "6px", width: "100%", boxSizing: "border-box" }}
+              />
+              <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", display: "block" }}>
+                Add raw test queries. Column headers MUST be: <strong>question</strong>, <strong>ground_truth</strong>, and optionally <strong>context</strong>.
+              </span>
             </div>
             <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "10px" }}>
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>

@@ -371,3 +371,69 @@ def test_report_generation():
     shutil.rmtree(report_dir)
 
 
+def test_custom_samples_evaluation(db_session):
+    from backend.main import run_evaluation_handler
+    from backend.models import EvaluationRun, Experiment, Model, Dataset, Prompt, EvaluationLog
+    
+    # 1. Create a dataset carrying custom samples
+    custom_samples = [
+        {"question": "Custom Math query 1?", "ground_truth": "42"},
+        {"question": "Custom Math query 2?", "ground_truth": "100"}
+    ]
+    
+    d = Dataset(id="custom_ds", name="Custom DS", task="Math", version="1.0", samples=custom_samples)
+    m = Model(id="custom_model", name="Custom Model", provider="mock", version="1.0")
+    p = Prompt(id="custom_prompt", name="Custom Prompt", content="Solve: {{question}}", task="Math", version="1.0")
+    db_session.add_all([d, m, p])
+    db_session.commit()
+    
+    exp = Experiment(
+        name="Custom Samples Test",
+        model_id="custom_model",
+        dataset_id="custom_ds",
+        prompt_id="custom_prompt",
+        dataset_version="1.0",
+        model_version="1.0",
+        prompt_version="1.0",
+        evaluation_version="1.0.0",
+        git_commit="none",
+        temperature=0.7,
+        top_p=0.9,
+        max_tokens=100,
+        seed=42,
+        status="running"
+    )
+    db_session.add(exp)
+    db_session.commit()
+    
+    run = EvaluationRun(
+        id="run_custom_samples_123",
+        experiment_id=exp.id,
+        status="pending",
+        progress=0.0
+    )
+    db_session.add(run)
+    db_session.commit()
+    
+    # Mock SessionLocal inside backend.main to yield our memory database session
+    import backend.main
+    original_session_local = backend.main.SessionLocal
+    backend.main.SessionLocal = lambda: db_session
+    
+    try:
+        run_evaluation_handler({"run_id": "run_custom_samples_123"}, heartbeat_fn=lambda *args, **kwargs: None)
+    finally:
+        backend.main.SessionLocal = original_session_local
+        
+    # Query run fresh to avoid detached instance issues
+    db_run = db_session.query(EvaluationRun).filter(EvaluationRun.id == "run_custom_samples_123").first()
+    assert db_run.status == "completed"
+    
+    # Check that logs were written specifically for our two custom samples
+    logs = db_session.query(EvaluationLog).filter(EvaluationLog.run_id == "run_custom_samples_123").all()
+    assert len(logs) == 2
+    assert "Custom Math query 1" in logs[0].input_text
+    assert "Custom Math query 2" in logs[1].input_text
+
+
+

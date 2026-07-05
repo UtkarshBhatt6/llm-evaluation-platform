@@ -1,0 +1,136 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Evaluation Report - Run 18872ae5-0d1c-48ae-80c9-4c10598530fb</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    background-color: #111827;
+                    color: #e5e7eb;
+                    margin: 0;
+                    padding: 40px;
+                }
+                .container {
+                    max-width: 900px;
+                    margin: 0 auto;
+                    background-color: #1f2937;
+                    padding: 30px;
+                    border-radius: 12px;
+                    border: 1px solid #10b981;
+                    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.15);
+                }
+                h1 {
+                    color: #10b981;
+                    border-bottom: 2px solid #374151;
+                    padding-bottom: 10px;
+                    margin-top: 0;
+                }
+                h2 {
+                    color: #34d399;
+                    margin-top: 30px;
+                    border-bottom: 1px solid #4b5563;
+                    padding-bottom: 5px;
+                }
+                .meta-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 15px;
+                    background: #111827;
+                    padding: 15px;
+                    border-radius: 6px;
+                    margin-bottom: 20px;
+                }
+                .meta-item {
+                    font-size: 14px;
+                }
+                .meta-item strong {
+                    color: #10b981;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 15px;
+                }
+                th, td {
+                    padding: 10px;
+                    text-align: left;
+                    border-bottom: 1px solid #374151;
+                }
+                th {
+                    background-color: #111827;
+                    color: #34d399;
+                }
+                li {
+                    margin-bottom: 10px;
+                    line-height: 1.5;
+                }
+                .footer {
+                    margin-top: 40px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #6b7280;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Evaluation Report</h1>
+                <p>Run ID: <strong>18872ae5-0d1c-48ae-80c9-4c10598530fb</strong></p>
+                <div class="meta-grid">
+                    <div class="meta-item"><strong>Date Compiled:</strong> 2026-07-05 10:03:29 UTC</div>
+                    <div class="meta-item"><strong>Run Status:</strong> completed</div>
+                    <div class="meta-item"><strong>Model Name:</strong> Deepseek Coder V2 (Mock)</div>
+                    <div class="meta-item"><strong>Dataset:</strong> AGENT EXECUTION V1 (Agent)</div>
+                </div>
+
+                <h2>Configuration Parameters</h2>
+                <div class="meta-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr;">
+                    <div class="meta-item"><strong>Temperature:</strong> 0.7</div>
+                    <div class="meta-item"><strong>Top P:</strong> 0.95</div>
+                    <div class="meta-item"><strong>Max Tokens:</strong> 256</div>
+                    <div class="meta-item"><strong>Seed:</strong> 42</div>
+                </div>
+
+                <h2>Summary Metrics</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Total Samples</td><td>2</td></tr><tr><td>Avg Latency</td><td>0.3471</td></tr><tr><td>Total Cost</td><td>0.0004</td></tr><tr><td>Accuracy</td><td>0.5000</td></tr><tr><td>Task Success</td><td>0.0000</td></tr><tr><td>Avg Steps</td><td>4.0000</td></tr><tr><td>Total Tool Errors</td><td>1</td></tr>
+                    </tbody>
+                </table>
+
+                <div style="text-align: center; margin: 20px 0;"><img src="data:image/png;base64,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" alt="Metrics Plot" style="border-radius: 8px; border: 1px solid #374151; max-width: 100%;"></div>
+
+                <h2>Failures by Category</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Count</th>
+                            <th>Example Sample</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Reasoning (Math)</td><td>1</td><td>Sync CRM client accounts and generate the summary invoice report....</td></tr>
+                    </tbody>
+                </table>
+
+                <h2>Conclusions & Recommendations</h2>
+                <ul>
+                    <li><strong>Implement Few-Shot Prompting:</strong> Baseline task success is low. Consider transitioning from zero-shot to a 3-shot or 5-shot CoT template to prime correct output formatting.</li>
+                </ul>
+
+                <div class="footer">
+                    Generated automatically by Generic ML Experimentation and Evaluation Platform.
+                </div>
+            </div>
+        </body>
+        </html>
+        
