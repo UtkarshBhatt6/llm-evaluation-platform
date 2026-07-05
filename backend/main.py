@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from backend.db import engine, Base, get_db, SessionLocal
 from backend.models import Dataset, Model, Prompt, Experiment, EvaluationRun, EvaluationLog, Job
 from backend.schemas import (
+    DatasetBase, ModelBase, PromptBase,
     DatasetResponse, ModelResponse, PromptResponse, ExperimentCreate, ExperimentSweepCreate, ExperimentGridSweepCreate,
     ExperimentResponse, EvaluationRunResponse, RunDetailResponse, JobStats, LeaderboardEntry
 )
@@ -516,7 +517,7 @@ def list_datasets(db: Session = Depends(get_db)):
 
 
 @app.post("/api/datasets", response_model=DatasetResponse)
-def create_dataset(dataset: DatasetResponse, db: Session = Depends(get_db)):
+def create_dataset(dataset: DatasetBase, db: Session = Depends(get_db)):
     db_dataset = db.query(Dataset).filter(Dataset.id == dataset.id).first()
     if db_dataset:
         raise HTTPException(status_code=400, detail="Dataset already exists with this ID")
@@ -546,7 +547,7 @@ def list_models(db: Session = Depends(get_db)):
 
 
 @app.post("/api/models", response_model=ModelResponse)
-def create_model(model: ModelResponse, db: Session = Depends(get_db)):
+def create_model(model: ModelBase, db: Session = Depends(get_db)):
     db_model = db.query(Model).filter(Model.id == model.id).first()
     if db_model:
         raise HTTPException(status_code=400, detail="Model already exists with this ID")
@@ -573,7 +574,7 @@ def list_prompts(db: Session = Depends(get_db)):
 
 
 @app.post("/api/prompts", response_model=PromptResponse)
-def create_prompt(prompt: PromptResponse, db: Session = Depends(get_db)):
+def create_prompt(prompt: PromptBase, db: Session = Depends(get_db)):
     db_prompt = db.query(Prompt).filter(Prompt.id == prompt.id).first()
     if db_prompt:
         raise HTTPException(status_code=400, detail="Prompt already exists with this ID")
