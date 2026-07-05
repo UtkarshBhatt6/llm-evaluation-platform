@@ -871,6 +871,7 @@ def get_run_detail(run_id: str, db: Session = Depends(get_db)):
     return {
         "id": run.id,
         "status": run.status,
+        "error_message": run.error_message,
         "progress": run.progress,
         "experiment": run.experiment,
         "model": run.experiment.model,

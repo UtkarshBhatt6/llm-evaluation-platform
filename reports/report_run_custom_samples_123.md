@@ -1,5 +1,5 @@
 # Evaluation Report: Run run_custom_samples_123
-**Date Compiled:** 2026-07-05 10:16:56 UTC
+**Date Compiled:** 2026-07-05 10:23:49 UTC
 **Execution Status:** completed
 **Total Run Duration:** 1.16 seconds
 
@@ -13,7 +13,7 @@
 | Target Metric | Value |
 | --- | --- |
 | Total Samples | 2 |
-| Avg Latency | 0.3469 |
+| Avg Latency | 0.3467 |
 | Total Cost | 0.0002 |
 | Accuracy | 0.0000 |
 | Bleu | 0.0000 |

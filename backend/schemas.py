@@ -134,6 +134,7 @@ class EvaluationLogResponse(BaseModel):
 class RunDetailResponse(BaseModel):
     id: str
     status: str
+    error_message: Optional[str] = None
     progress: float
     experiment: ExperimentResponse
     model: ModelResponse

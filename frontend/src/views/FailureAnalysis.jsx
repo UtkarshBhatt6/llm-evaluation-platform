@@ -13,7 +13,7 @@ export default function FailureAnalysis({ runId, setRunId }) {
     try {
       const res = await fetch("http://localhost:8000/api/results");
       const data = await res.json();
-      const completed = data.filter(r => r.status === "completed");
+      const completed = data.filter(r => r.status === "completed" || r.status === "failed");
       setRuns(completed);
       setLoadingRuns(false);
       
@@ -90,6 +90,11 @@ export default function FailureAnalysis({ runId, setRunId }) {
               >
                 <strong style={{ display: "block", fontSize: "13px", color: "var(--text-main)" }}>
                   Experiment #{run.experiment_id}
+                  {run.status === "failed" && (
+                    <span style={{ color: "var(--danger-neon)", marginLeft: "6px", fontSize: "10px", fontWeight: "bold" }}>
+                      (Failed)
+                    </span>
+                  )}
                 </strong>
                 <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Run ID: {run.id.slice(0, 8)}...</span>
               </div>
@@ -114,19 +119,39 @@ export default function FailureAnalysis({ runId, setRunId }) {
                     </h3>
                     <p style={{ fontSize: "13px", color: "var(--text-muted)" }}>
                       Dataset: <strong>{runDetail.dataset.name}</strong> • Total Failures: <strong>
-                        {Object.values(runDetail.failures).reduce((acc, list) => acc + list.length, 0)}
+                        {Object.values(runDetail.failures || {}).reduce((acc, list) => acc + list.length, 0)}
                       </strong>
                     </p>
                   </div>
                   <div style={{ display: "flex", gap: "10px" }}>
-                    <span className="badge badge-completed">Accuracy: {(runDetail.metrics_summary.accuracy * 100).toFixed(0)}%</span>
-                    <span className="badge badge-pending">Avg Latency: {runDetail.metrics_summary.avg_latency.toFixed(2)}s</span>
+                    <span className="badge badge-completed">
+                      Accuracy: {runDetail.metrics_summary?.accuracy !== undefined ? `${(runDetail.metrics_summary.accuracy * 100).toFixed(0)}%` : "N/A"}
+                    </span>
+                    <span className="badge badge-pending">
+                      Avg Latency: {runDetail.metrics_summary?.avg_latency !== undefined ? `${runDetail.metrics_summary.avg_latency.toFixed(2)}s` : "N/A"}
+                    </span>
                   </div>
                 </div>
               </div>
 
+              {/* Error Message if run status is failed */}
+              {runDetail.status === "failed" && (
+                <div className="panel" style={{ borderLeft: "4px solid var(--danger-neon)", padding: "16px", marginBottom: "16px", backgroundColor: "rgba(248, 81, 73, 0.08)" }}>
+                  <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--danger-neon)", display: "block", marginBottom: "6px" }}>
+                    ⚠️ Execution Run Failed (System Error)
+                  </span>
+                  <pre style={{ margin: 0, padding: "10px", backgroundColor: "var(--bg-dark)", border: "1px solid #21262d", borderRadius: "6px", color: "#f85149", fontSize: "12px", whiteSpace: "pre-wrap", fontFamily: "monospace", overflowX: "auto" }}>
+                    {runDetail.error_message || "Execution failed due to runtime exception or network timeout."}
+                  </pre>
+                </div>
+              )}
+
               {/* Grid showing failures breakdown */}
-              {Object.keys(runDetail.failures).length === 0 ? (
+              {runDetail.status === "failed" ? (
+                <div className="panel" style={{ padding: "20px", textAlign: "center", color: "var(--text-muted)", fontSize: "13px" }}>
+                  No semantic diagnostics are available for this run since the execution worker failed before completing metrics aggregation.
+                </div>
+              ) : Object.keys(runDetail.failures || {}).length === 0 ? (
                 <div className="panel">
                   <p style={{ color: "var(--emerald-bright)", fontWeight: "600" }}>
                     🎉 No failures! The model passed all tests with 100% accuracy.
